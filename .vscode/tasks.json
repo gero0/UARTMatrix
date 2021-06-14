@@ -1,0 +1,17 @@
+{
+    "tasks": [
+        {
+            "type": "cargo",
+            "command": "+nightly",
+            "options": {
+                "cwd": "${workspaceRoot}",
+            },
+            "args": ["build", "--target", "thumbv7m-none-eabi"],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": "build",
+            "label": "cargo build"
+        }
+    ]
+}
