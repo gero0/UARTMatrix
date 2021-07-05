@@ -13,4 +13,17 @@ cortex-m = "0.7.2"
 cortex-m-rt = "0.6.11"
 # Panic behaviour, see https://crates.io/keywords/panic-impl for alternatives
 panic-semihosting = "0.5.6"
-stm32f1xx-hal = { version = "0.7.0", features = ["stm32f103", "medium", "rt"] }
+cortex-m-semihosting = "0.3.7"
+usb-device = "0.2.3"
+usbd-serial = "0.1.0"
+stm32f1xx-hal = { version = "0.7.0", features = ["stm32f103", "medium", "rt", "stm32-usbd"] }
+
+[profile.dev]
+debug = 1
+opt-level = 'z'
+lto = true      # Link-time-optimizations for further size reduction
+
+[profile.release]
+debug = 0
+opt-level = 's'
+lto = true      # Link-time-optimizations for further size reduction
