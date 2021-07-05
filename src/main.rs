@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 
+mod display;
+
 use cortex_m::peripheral::NVIC;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::hprintln;
@@ -115,7 +117,7 @@ fn usb_interrupt() {
             // Echo back in upper case
 
             serial.write(&buf).ok();
-            hprintln!("{:?}", buf);
+            //hprintln!("{:?}", buf);
         }
         _ => {}
     }
