@@ -1,12 +1,11 @@
-use core::char::MAX;
-
-use super::text_animations::TextAnimation;
+use super::{font::Font, text_animations::TextAnimation};
 use heapless::String;
 
 #[derive(Debug)]
 pub struct TextDisplay<const MAX_ROW_LENGTH: usize> {
     rows: [String<MAX_ROW_LENGTH>; 3],
     animation: [TextAnimation; 3],
+    font: [Font; 3]
 }
 
 impl<const MAX_ROW_LENGTH: usize> TextDisplay<MAX_ROW_LENGTH> {
@@ -18,6 +17,7 @@ impl<const MAX_ROW_LENGTH: usize> TextDisplay<MAX_ROW_LENGTH> {
                 TextAnimation::NoAnimation,
                 TextAnimation::NoAnimation,
             ],
+            font: [Font::CoolFont; 3],
         }
     }
 }

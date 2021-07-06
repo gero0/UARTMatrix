@@ -1,6 +1,7 @@
-mod direct_display;
-mod text_display;
-mod text_animations;
+pub mod direct_display;
+pub mod text_display;
+pub mod text_animations;
+pub mod font;
 
 pub use direct_display::DirectDisplay;
 pub use text_display::TextDisplay;
