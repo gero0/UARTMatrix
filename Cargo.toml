@@ -17,14 +17,15 @@ panic-semihosting = "0.5.6"
 cortex-m-semihosting = "0.3.7"
 usb-device = "0.2.3"
 usbd-serial = "0.1.0"
-stm32f1xx-hal = { version = "0.7.0", features = ["stm32f103", "medium", "rt", "stm32-usbd"] }
+stm32f1xx-hal = { version="0.7.0", features=["stm32f103", "medium", "rt", "stm32-usbd"] }
+hub75 = { git="https://github.com/PawelLawrynowicz/hub75-rs", branch="sm-optimization", features=["stripe-multiplexing"] }
 
 [profile.dev]
 debug = 1
 opt-level = 'z'
-lto = true      # Link-time-optimizations for further size reduction
+lto = true # Link-time-optimizations for further size reduction
 
 [profile.release]
 debug = 0
 opt-level = 's'
-lto = true      # Link-time-optimizations for further size reduction
+lto = true # Link-time-optimizations for further size reduction
