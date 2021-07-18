@@ -6,7 +6,7 @@ pub mod font;
 pub use direct_display::DirectDisplay;
 pub use text_display::TextDisplay;
 
-enum DisplayModes<const MAX_ROW_LENGTH: usize>{
+pub enum DisplayMode<const MAX_ROW_LENGTH: usize>{
     TextMode(TextDisplay<MAX_ROW_LENGTH>),
     DirectMode(DirectDisplay)
 }

@@ -18,7 +18,9 @@ cortex-m-semihosting = "0.3.7"
 usb-device = "0.2.3"
 usbd-serial = "0.1.0"
 stm32f1xx-hal = { version="0.7.0", features=["stm32f103", "medium", "rt", "stm32-usbd"] }
-hub75 = { git="https://github.com/PawelLawrynowicz/hub75-rs", branch="sm-optimization", features=["stripe-multiplexing"] }
+hub75 = { git="https://github.com/PawelLawrynowicz/hub75-rs", branch="experiments", features=["stripe-multiplexing"] }
+tinytga = {version = "0.3.2", features=["graphics"]}
+embedded-graphics = "0.6.2"
 
 [profile.dev]
 debug = 1
