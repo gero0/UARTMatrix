@@ -2,12 +2,13 @@
 #![no_main]
 #![feature(const_generics)]
 
-mod display;
 mod command_interpreter;
+mod display;
 
 use crate::command_interpreter::interpret_command;
-use display::DisplayMode;
 use display::text_display::TextDisplay;
+use display::DisplayMode;
+use heapless::String;
 
 use cortex_m::asm::delay;
 use cortex_m::peripheral::NVIC;
@@ -26,9 +27,7 @@ use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
 use usb_device::{bus::UsbBusAllocator, prelude::*};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
-use embedded_graphics::drawable::Drawable;
-use embedded_graphics::{image::Image, pixelcolor::Rgb888, prelude::Point, DrawTarget};
-use tinytga::Tga;
+use display::font::Font;
 
 use hub75::{Hub75, Pins};
 
@@ -111,10 +110,6 @@ fn main() -> ! {
     };
     let bus = UsbBus::new(usb);
 
-    let img = include_bytes!("../ferris.tga");
-    let tga = Tga::from_slice(img).unwrap();
-    let image: Image<Tga, Rgb888> = Image::new(&tga, Point::zero());
-
     // Unsafe to allow access to static variables
     unsafe {
         USB_BUS = Some(bus);
@@ -134,11 +129,24 @@ fn main() -> ! {
         NVIC::unmask(Interrupt::TIM2);
 
         DELAY = Some(Delay::new(p.SYST, clocks));
-
-        image.draw(DISPLAY.as_mut().unwrap()).unwrap();
     }
 
     let display_mode = DisplayMode::TextMode(TextDisplay::<256>::new());
+
+    match display_mode {
+        DisplayMode::TextMode(mut tm) => {
+            tm.write(String::from("ABCDEabcde"), 0);
+            tm.write(String::from("ABCDEabcde"), 1);
+            tm.write(String::from("ABCDEabcde"), 2);
+            tm.set_color(0, 0, 255, 0);
+            tm.set_color(1, 255, 0, 0);
+            tm.set_color(2, 0, 0, 255);
+            tm.set_font(1, Font::Ibm);
+            tm.set_font(2, Font::ProFont);
+            unsafe { tm.update(DISPLAY.as_mut().unwrap()) }
+        }
+        _ => {}
+    }
 
     let mut timer = Timer::tim2(dp.TIM2, &clocks, &mut rcc.apb1).start_count_down(100.hz());
     timer.listen(Event::Update);
