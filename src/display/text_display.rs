@@ -1,37 +1,30 @@
-use super::{font::Font, text_animations::TextAnimation};
-use embedded_graphics::drawable::Drawable;
-use embedded_graphics::fonts::Font6x8;
-use embedded_graphics::fonts::Text;
-use embedded_graphics::pixelcolor::{Rgb888, RgbColor};
-use embedded_graphics::prelude::Point;
-use embedded_graphics::style::TextStyle;
-use embedded_graphics::style::TextStyleBuilder;
-use embedded_graphics::DrawTarget;
+use embedded_graphics::text::Text;
 use heapless::String;
 
-use ibm437::Ibm437Font8x8Normal;
-use profont::ProFont7Point;
+use embedded_graphics::draw_target::DrawTarget;
+use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
+use embedded_graphics::pixelcolor::{Rgb888, RgbColor};
+use embedded_graphics::prelude::Point;
+use embedded_graphics::Drawable;
+
+use embedded_graphics::mono_font::ascii::FONT_6X9;
+use ibm437::IBM437_8X8_NORMAL;
+use profont::PROFONT_7_POINT;
+
+use super::{font::Font, text_animations::TextAnimation};
 
 const ROWS: usize = 3;
 const OFFSET: i32 = 3;
-
 #[derive(Debug)]
-enum Style {
-    Default(TextStyle<Rgb888, Font6x8>),
-    ProFont(TextStyle<Rgb888, ProFont7Point>),
-    Ibm(TextStyle<Rgb888, Ibm437Font8x8Normal>),
-}
-
-#[derive(Debug)]
-pub struct TextDisplay<const MAX_ROW_LENGTH: usize> {
+pub struct TextDisplay<'a, const MAX_ROW_LENGTH: usize> {
     rows: [String<MAX_ROW_LENGTH>; ROWS],
     animation: [TextAnimation; ROWS],
-    style: [Style; ROWS],
+    style: [MonoTextStyle<'a, Rgb888>; ROWS],
 }
 
-impl<const MAX_ROW_LENGTH: usize> TextDisplay<MAX_ROW_LENGTH> {
+impl<'a, const MAX_ROW_LENGTH: usize> TextDisplay<'a, MAX_ROW_LENGTH> {
     pub fn new() -> Self {
-        let style = TextStyleBuilder::new(Font6x8)
+        let style = MonoTextStyleBuilder::new()
             .text_color(Rgb888::new(255, 255, 255))
             .background_color(Rgb888::BLACK)
             .build();
@@ -43,11 +36,7 @@ impl<const MAX_ROW_LENGTH: usize> TextDisplay<MAX_ROW_LENGTH> {
                 TextAnimation::NoAnimation,
                 TextAnimation::NoAnimation,
             ],
-            style: [
-                Style::Default(style.clone()),
-                Style::Default(style.clone()),
-                Style::Default(style.clone()),
-            ],
+            style: [style; 3],
         }
     }
 
@@ -66,11 +55,7 @@ impl<const MAX_ROW_LENGTH: usize> TextDisplay<MAX_ROW_LENGTH> {
 
         let current_style = &mut self.style[row];
 
-        match current_style {
-            Style::Default(style) => style.text_color = Some(Rgb888::new(r, g, b)),
-            Style::ProFont(style) => style.text_color = Some(Rgb888::new(r, g, b)),
-            Style::Ibm(style) => style.text_color = Some(Rgb888::new(r, g, b)),
-        };
+        current_style.text_color = Some(Rgb888::new(r, g, b));
     }
 
     pub fn set_font(&mut self, row: usize, font: Font) {
@@ -78,53 +63,12 @@ impl<const MAX_ROW_LENGTH: usize> TextDisplay<MAX_ROW_LENGTH> {
             return;
         }
 
-        let current_style = &mut self.style[row];
-
-        let mut current_color = Rgb888::new(255, 255, 255);
-
-        match current_style {
-            Style::Default(style) => {
-                if style.text_color.is_some() {
-                    current_color = style.text_color.unwrap();
-                }
-            }
-            Style::ProFont(style) => {
-                if style.text_color.is_some() {
-                    current_color = style.text_color.unwrap();
-                }
-            }
-            Style::Ibm(style) => {
-                if style.text_color.is_some() {
-                    current_color = style.text_color.unwrap();
-                }
-            }
-        };
+        let style = &mut self.style[row];
 
         match font {
-            Font::Default => {
-                self.style[row] = Style::Default(
-                    TextStyleBuilder::new(Font6x8)
-                        .text_color(current_color)
-                        .background_color(Rgb888::BLACK)
-                        .build(),
-                );
-            }
-            Font::Ibm => {
-                self.style[row] = Style::Ibm(
-                    TextStyleBuilder::new(Ibm437Font8x8Normal)
-                        .text_color(current_color)
-                        .background_color(Rgb888::BLACK)
-                        .build(),
-                );
-            }
-            Font::ProFont => {
-                self.style[row] = Style::ProFont(
-                    TextStyleBuilder::new(ProFont7Point {})
-                        .text_color(current_color)
-                        .background_color(Rgb888::BLACK)
-                        .build(),
-                );
-            }
+            Font::Default => style.font = &FONT_6X9,
+            Font::Ibm => style.font = &IBM437_8X8_NORMAL,
+            Font::ProFont => style.font = &PROFONT_7_POINT,
         };
     }
 
@@ -136,27 +80,16 @@ impl<const MAX_ROW_LENGTH: usize> TextDisplay<MAX_ROW_LENGTH> {
         self.animation[row] = animation;
     }
 
-    pub fn update<T: DrawTarget<Rgb888>>(&mut self, target: &mut T) {
+    pub fn update<T: DrawTarget<Color = Rgb888>>(&mut self, target: &mut T) {
         for i in 0..ROWS {
             let current_style = &mut self.style[i];
 
-            match current_style {
-                Style::Default(style) => {
-                    Text::new(self.rows[i].as_str(), Point::new(0, OFFSET + (i as i32 * 9)))
-                        .into_styled(style.clone())
-                        .draw(target).ok();
-                }
-                Style::ProFont(style) => {
-                    Text::new(self.rows[i].as_str(), Point::new(0, OFFSET + (i as i32 * 9)))
-                        .into_styled(style.clone())
-                        .draw(target).ok();
-                }
-                Style::Ibm(style) => {
-                    Text::new(self.rows[i].as_str(), Point::new(0, OFFSET + (i as i32 * 9)))
-                        .into_styled(style.clone())
-                        .draw(target).ok();
-                }
-            }
+            Text::new(
+                self.rows[i].as_str(),
+                Point::new(0, OFFSET + (i as i32 * 9)),
+                current_style.clone(),
+            )
+            .draw(target).ok();
         }
     }
 }

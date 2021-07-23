@@ -23,13 +23,13 @@ stm32f1xx-hal = { version = "0.7.0", features = [
     "rt",
     "stm32-usbd",
 ] }
-hub75 = { git = "https://github.com/PawelLawrynowicz/hub75-rs", branch = "experiments", features = [
+hub75 = { git = "https://github.com/PawelLawrynowicz/hub75-rs", branch = "eg07-port", features = [
     "stripe-multiplexing",
 ] }
-tinytga = { version = "0.3.2", features = ["graphics"] }
-embedded-graphics = "0.6.2"
-ibm437 = "=0.1.3"
-profont = "0.4.0"
+tinytga = "0.4.1"
+embedded-graphics = "0.7.1"
+ibm437 = "0.1.4"
+profont = "0.5.0"
 
 [profile.dev]
 debug = 1

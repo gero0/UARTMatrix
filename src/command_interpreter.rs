@@ -23,9 +23,9 @@ pub fn interpret_command<const MAX_ROW_LENGTH: usize, const ROW_LENGTH: usize>(
     }
 }
 
-pub enum Command<const MAX_ROW_LENGTH: usize, const ROW_LENGTH: usize> {
+pub enum Command<'a, const MAX_ROW_LENGTH: usize, const ROW_LENGTH: usize> {
     Ping,
-    SwitchMode(SwitchMode<MAX_ROW_LENGTH>),
+    SwitchMode(SwitchMode<'a, MAX_ROW_LENGTH>),
     Write(Write<MAX_ROW_LENGTH>),
     SetFont(SetFont),
     SetColor(SetColor),
@@ -35,8 +35,8 @@ pub enum Command<const MAX_ROW_LENGTH: usize, const ROW_LENGTH: usize> {
     InvalidCommand,
 }
 
-pub struct SwitchMode<const MAX_ROW_LENGTH: usize> {
-    mode: DisplayMode<MAX_ROW_LENGTH>,
+pub struct SwitchMode<'a, const MAX_ROW_LENGTH: usize> {
+    mode: DisplayMode<'a, MAX_ROW_LENGTH>,
 }
 
 // impl SwitchMode{
