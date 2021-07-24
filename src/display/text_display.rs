@@ -1,17 +1,19 @@
-use embedded_graphics::text::Text;
 use heapless::String;
 
-use embedded_graphics::draw_target::DrawTarget;
-use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
-use embedded_graphics::pixelcolor::{Rgb888, RgbColor};
-use embedded_graphics::prelude::Point;
-use embedded_graphics::Drawable;
+use embedded_graphics::{
+    draw_target::DrawTarget,
+    mono_font::{MonoTextStyle, MonoTextStyleBuilder},
+    pixelcolor::{Rgb888, RgbColor},
+    prelude::Point,
+    text::Text,
+    Drawable,
+};
 
 use embedded_graphics::mono_font::ascii::FONT_6X9;
 use ibm437::IBM437_8X8_NORMAL;
 use profont::PROFONT_7_POINT;
 
-use super::{font::Font, text_animations::TextAnimation};
+use super::{font::Font, text_animations::TextAnimation, DisplayError};
 
 const ROWS: usize = 3;
 const OFFSET: i32 = 3;
@@ -40,27 +42,31 @@ impl<'a, const MAX_ROW_LENGTH: usize> TextDisplay<'a, MAX_ROW_LENGTH> {
         }
     }
 
-    pub fn write(&mut self, text: String<MAX_ROW_LENGTH>, row: usize) {
+    pub fn write(&mut self, text: String<MAX_ROW_LENGTH>, row: usize) -> Result<(), DisplayError> {
         if row >= ROWS {
-            return;
+            return Err(DisplayError::OutOfBounds);
         }
 
         self.rows[row] = text;
+
+        Ok(())
     }
 
-    pub fn set_color(&mut self, row: usize, r: u8, g: u8, b: u8) {
+    pub fn set_color(&mut self, row: usize, r: u8, g: u8, b: u8) -> Result<(), DisplayError> {
         if row >= ROWS {
-            return;
+            return Err(DisplayError::OutOfBounds);
         }
 
         let current_style = &mut self.style[row];
 
         current_style.text_color = Some(Rgb888::new(r, g, b));
+
+        Ok(())
     }
 
-    pub fn set_font(&mut self, row: usize, font: Font) {
+    pub fn set_font(&mut self, row: usize, font: Font) -> Result<(), DisplayError> {
         if row >= ROWS {
-            return;
+            return Err(DisplayError::OutOfBounds);
         }
 
         let style = &mut self.style[row];
@@ -70,14 +76,22 @@ impl<'a, const MAX_ROW_LENGTH: usize> TextDisplay<'a, MAX_ROW_LENGTH> {
             Font::Ibm => style.font = &IBM437_8X8_NORMAL,
             Font::ProFont => style.font = &PROFONT_7_POINT,
         };
+
+        Ok(())
     }
 
-    pub fn set_animation(&mut self, row: usize, animation: TextAnimation) {
+    pub fn set_animation(
+        &mut self,
+        row: usize,
+        animation: TextAnimation,
+    ) -> Result<(), DisplayError> {
         if row >= ROWS {
-            return;
+            return Err(DisplayError::OutOfBounds);
         }
 
         self.animation[row] = animation;
+
+        Ok(())
     }
 
     pub fn update<T: DrawTarget<Color = Rgb888>>(&mut self, target: &mut T) {
@@ -89,7 +103,8 @@ impl<'a, const MAX_ROW_LENGTH: usize> TextDisplay<'a, MAX_ROW_LENGTH> {
                 Point::new(0, OFFSET + (i as i32 * 9)),
                 current_style.clone(),
             )
-            .draw(target).ok();
+            .draw(target)
+            .ok();
         }
     }
 }
