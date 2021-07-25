@@ -10,6 +10,7 @@ pub enum DisplayError{
     IncorrectMode,
     InvalidSetting,
     InvalidCommand,
+    DrawError,
 }
 
 pub enum DisplayMode<'a, const MAX_ROW_LENGTH: usize>{

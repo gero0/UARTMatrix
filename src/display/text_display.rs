@@ -18,13 +18,13 @@ use super::{font::Font, text_animations::TextAnimation, DisplayError};
 const ROWS: usize = 3;
 const OFFSET: i32 = 3;
 #[derive(Debug)]
-pub struct TextDisplay<'a, const MAX_ROW_LENGTH: usize> {
-    rows: [String<MAX_ROW_LENGTH>; ROWS],
+pub struct TextDisplay<'a, const TEXT_ROW_LENGTH: usize> {
+    rows: [String<TEXT_ROW_LENGTH>; ROWS],
     animation: [TextAnimation; ROWS],
     style: [MonoTextStyle<'a, Rgb888>; ROWS],
 }
 
-impl<'a, const MAX_ROW_LENGTH: usize> TextDisplay<'a, MAX_ROW_LENGTH> {
+impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
     pub fn new() -> Self {
         let style = MonoTextStyleBuilder::new()
             .text_color(Rgb888::new(255, 255, 255))
@@ -42,7 +42,7 @@ impl<'a, const MAX_ROW_LENGTH: usize> TextDisplay<'a, MAX_ROW_LENGTH> {
         }
     }
 
-    pub fn write(&mut self, text: String<MAX_ROW_LENGTH>, row: usize) -> Result<(), DisplayError> {
+    pub fn write(&mut self, row: usize, text: String<TEXT_ROW_LENGTH>) -> Result<(), DisplayError> {
         if row >= ROWS {
             return Err(DisplayError::OutOfBounds);
         }
@@ -52,12 +52,14 @@ impl<'a, const MAX_ROW_LENGTH: usize> TextDisplay<'a, MAX_ROW_LENGTH> {
         Ok(())
     }
 
-    pub fn set_color(&mut self, row: usize, r: u8, g: u8, b: u8) -> Result<(), DisplayError> {
+    pub fn set_color(&mut self, row: usize, rgb_color: (u8, u8, u8)) -> Result<(), DisplayError> {
         if row >= ROWS {
             return Err(DisplayError::OutOfBounds);
         }
 
         let current_style = &mut self.style[row];
+
+        let (r, g, b) = rgb_color;
 
         current_style.text_color = Some(Rgb888::new(r, g, b));
 

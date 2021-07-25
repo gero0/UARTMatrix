@@ -1,11 +1,14 @@
 use crate::display::{font::Font, text_animations::TextAnimation, DisplayError, TextDisplay};
 use crate::DisplayMode;
 use embedded_graphics::draw_target::DrawTarget;
+use embedded_graphics::pixelcolor::Rgb888;
+use embedded_graphics::prelude::Point;
+use embedded_graphics::{Drawable, Pixel};
 use heapless::String;
 
-pub fn interpret_command<const MAX_ROW_LENGTH: usize, const ROW_LENGTH: usize>(
+pub fn interpret_command<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize>(
     buffer: &[u8],
-) -> Result<Command<MAX_ROW_LENGTH, ROW_LENGTH>, DisplayError> {
+) -> Result<Command<TEXT_ROW_LENGTH, ROW_LENGTH>, DisplayError> {
     let command_id = buffer[0];
 
     match command_id {
@@ -24,19 +27,13 @@ pub fn interpret_command<const MAX_ROW_LENGTH: usize, const ROW_LENGTH: usize>(
     }
 }
 
-pub fn execute_command<T: DrawTarget, const MAX_ROW_LENGTH: usize>(
-    mode: &mut DisplayMode<MAX_ROW_LENGTH>,
-    target: &mut T,
-) {
-}
-
-pub enum Command<'a, const MAX_ROW_LENGTH: usize, const ROW_LENGTH: usize> {
+pub enum Command<'a, const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> {
     Ping,
     ParamRequest,
     DisableOutput,
     EnableOutput,
-    SwitchMode(SwitchMode<'a, MAX_ROW_LENGTH>),
-    Write(Write<MAX_ROW_LENGTH>),
+    SwitchMode(SwitchMode<'a, TEXT_ROW_LENGTH>),
+    Write(Write<TEXT_ROW_LENGTH>),
     SetFont(SetFont),
     SetColor(SetColor),
     SetAnimation(SetAnimation),
@@ -44,11 +41,57 @@ pub enum Command<'a, const MAX_ROW_LENGTH: usize, const ROW_LENGTH: usize> {
     DrawRow(DrawRow<ROW_LENGTH>),
 }
 
+impl<'a, const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize>
+    Command<'a, TEXT_ROW_LENGTH, ROW_LENGTH>
+{
+    pub fn execute<T: DrawTarget<Color = Rgb888>>(
+        self,
+        mode: &mut DisplayMode<TEXT_ROW_LENGTH>,
+        target: &mut T,
+    ) -> Result<&'static str, DisplayError> {
+        match mode {
+            DisplayMode::TextMode(text_display) => match self {
+                Command::Write(write) => write.execute(text_display)?,
+                Command::SetFont(set_font) => set_font.execute(text_display)?,
+                Command::SetColor(set_color) => set_color.execute(text_display)?,
+                Command::SetAnimation(set_animation) => set_animation.execute(text_display)?,
+                Command::Ping => return Ok("Pong"),
+                Command::ParamRequest => {
+                    return Ok("Mode:Text");
+                }
+                Command::DisableOutput => {
+                    //TODO: Implement
+                }
+                Command::EnableOutput => {
+                    //TODO: Implement
+                }
+                _ => return Err(DisplayError::IncorrectMode),
+            },
+            DisplayMode::DirectMode => match self {
+                Command::DrawPixel(draw_pixel) => draw_pixel.execute(target)?,
+                Command::DrawRow(draw_row) => draw_row.execute(target)?,
+                Command::Ping => return Ok("Pong"),
+                Command::ParamRequest => {
+                    return Ok("Mode:Direct");
+                }
+                Command::DisableOutput => {
+                    //TODO: Implement
+                }
+                Command::EnableOutput => {
+                    //TODO: Implement
+                }
+                _ => return Err(DisplayError::IncorrectMode),
+            },
+        }
+        Ok("OK")
+    }
+}
+
 pub struct SwitchMode<'a, const MAX_ROW_LENGTH: usize> {
     mode: DisplayMode<'a, MAX_ROW_LENGTH>,
 }
 
-impl<'a, const MAX_ROW_LENGTH: usize> SwitchMode<'a, MAX_ROW_LENGTH> {
+impl<'a, const TEXT_ROW_LENGTH: usize> SwitchMode<'a, TEXT_ROW_LENGTH> {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
         let mode = match buffer[1] {
             0 => DisplayMode::TextMode(TextDisplay::new()),
@@ -60,12 +103,12 @@ impl<'a, const MAX_ROW_LENGTH: usize> SwitchMode<'a, MAX_ROW_LENGTH> {
     }
 }
 
-pub struct Write<const MAX_ROW_LENGTH: usize> {
-    text: String<MAX_ROW_LENGTH>,
+pub struct Write<const TEXT_ROW_LENGTH: usize> {
+    text: String<TEXT_ROW_LENGTH>,
     row: usize,
 }
 
-impl<const MAX_ROW_LENGTH: usize> Write<MAX_ROW_LENGTH> {
+impl<const TEXT_ROW_LENGTH: usize> Write<TEXT_ROW_LENGTH> {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
         let row = buffer[1] as usize;
         let string =
@@ -75,6 +118,12 @@ impl<const MAX_ROW_LENGTH: usize> Write<MAX_ROW_LENGTH> {
             text: String::from(string),
             row,
         })
+    }
+
+    pub fn execute(self, target: &mut TextDisplay<TEXT_ROW_LENGTH>) -> Result<(), DisplayError> {
+        target.write(self.row, self.text)?;
+
+        Ok(())
     }
 }
 
@@ -97,6 +146,15 @@ impl SetFont {
 
         Ok(SetFont { row, font })
     }
+
+    pub fn execute<const TEXT_ROW_LENGTH: usize>(
+        self,
+        target: &mut TextDisplay<TEXT_ROW_LENGTH>,
+    ) -> Result<(), DisplayError> {
+        target.set_font(self.row, self.font)?;
+
+        Ok(())
+    }
 }
 
 pub struct SetColor {
@@ -111,6 +169,43 @@ impl SetColor {
 
         Ok(SetColor { rgb_color, row })
     }
+
+    pub fn execute<const TEXT_ROW_LENGTH: usize>(
+        self,
+        target: &mut TextDisplay<TEXT_ROW_LENGTH>,
+    ) -> Result<(), DisplayError> {
+        target.set_color(self.row, self.rgb_color)?;
+
+        Ok(())
+    }
+}
+
+pub struct SetAnimation {
+    animation: TextAnimation,
+    row: usize,
+}
+
+impl SetAnimation {
+    pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
+        let row = buffer[1] as usize;
+        let animation = match buffer[2] {
+            0 => TextAnimation::NoAnimation,
+            1 => TextAnimation::BlinkingAnimation,
+            2 => TextAnimation::SlideAnimation,
+            _ => return Err(DisplayError::InvalidSetting),
+        };
+
+        Ok(SetAnimation { row, animation })
+    }
+
+    pub fn execute<const TEXT_ROW_LENGTH: usize>(
+        self,
+        target: &mut TextDisplay<TEXT_ROW_LENGTH>,
+    ) -> Result<(), DisplayError> {
+        target.set_animation(self.row, self.animation)?;
+
+        Ok(())
+    }
 }
 
 pub struct DrawPixel {
@@ -124,6 +219,20 @@ impl DrawPixel {
         let rgb_color = (buffer[3], buffer[4], buffer[5]);
 
         Ok(DrawPixel { rgb_color, coords })
+    }
+
+    pub fn execute<T: DrawTarget<Color = Rgb888>>(
+        self,
+        target: &mut T,
+    ) -> Result<(), DisplayError> {
+        let (x, y) = self.coords;
+        let (r, g, b) = self.rgb_color;
+
+        let pixel = Pixel(Point::new(x as i32, y as i32), Rgb888::new(r, g, b));
+
+        pixel.draw(target).map_err(|_| DisplayError::DrawError)?;
+
+        Ok(())
     }
 }
 
@@ -145,22 +254,22 @@ impl<const ROW_LENGTH: usize> DrawRow<ROW_LENGTH> {
 
         Ok(Self { row, rgb_color })
     }
-}
-pub struct SetAnimation {
-    animation: TextAnimation,
-    row: usize,
-}
 
-impl SetAnimation {
-    pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
-        let row = buffer[1] as usize;
-        let animation = match buffer[2] {
-            0 => TextAnimation::NoAnimation,
-            1 => TextAnimation::BlinkingAnimation,
-            2 => TextAnimation::SlideAnimation,
-            _ => return Err(DisplayError::InvalidSetting),
-        };
+    pub fn execute<T: DrawTarget<Color = Rgb888>>(
+        self,
+        target: &mut T,
+    ) -> Result<(), DisplayError> {
+        let y = self.row;
 
-        Ok(SetAnimation { row, animation })
+        let pixels =
+            self.rgb_color.iter().enumerate().map(|(x, (r, g, b))| {
+                Pixel(Point::new(x as i32, y as i32), Rgb888::new(*r, *g, *b))
+            });
+
+        target
+            .draw_iter(pixels)
+            .map_err(|_| DisplayError::DrawError)?;
+
+        Ok(())
     }
 }

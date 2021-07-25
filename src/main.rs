@@ -135,12 +135,12 @@ fn main() -> ! {
 
     match display_mode {
         DisplayMode::TextMode(mut tm) => {
-            tm.write(String::from("ABCDEabcde"), 0);
-            tm.write(String::from("ABCDEabcde"), 1);
-            tm.write(String::from("ABCDEabcde"), 2);
-            tm.set_color(0, 0, 255, 0);
-            tm.set_color(1, 255, 0, 0);
-            tm.set_color(2, 0, 0, 255);
+            tm.write(0, String::from("ABCDEabcde"));
+            tm.write(1, String::from("ABCDEabcde"));
+            tm.write(2, String::from("ABCDEabcde"));
+            tm.set_color(0, (0, 255, 0));
+            tm.set_color(1, (255, 0, 0));
+            tm.set_color(2, (0, 0, 255));
             tm.set_font(1, Font::Ibm);
             tm.set_font(2, Font::ProFont);
             unsafe { tm.update(DISPLAY.as_mut().unwrap()) }
@@ -197,6 +197,16 @@ fn usb_interrupt() {
     match serial.read(&mut buf) {
         Ok(count) if count > 0 => {
             let command = interpret_command::<256, 64>(&buf);
+            match command {
+                Ok(command) => {
+                    //command.execute(mode, target, serial);
+                    serial.write("OK".as_bytes());
+                }
+                Err(err) => {
+                    //let message = get_error_message(err);
+                    //serial.write(message.as_bytes()).ok();
+                }
+            }
 
             serial.write(&buf).ok();
             //hprintln!("{:?}", buf);
