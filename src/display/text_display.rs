@@ -5,7 +5,7 @@ use embedded_graphics::{
     mono_font::{MonoTextStyle, MonoTextStyleBuilder},
     pixelcolor::{Rgb888, RgbColor},
     prelude::Point,
-    text::Text,
+    text::{Text, Baseline},
     Drawable,
 };
 
@@ -16,7 +16,7 @@ use profont::PROFONT_7_POINT;
 use super::{font::Font, text_animations::TextAnimation, DisplayError};
 
 const ROWS: usize = 3;
-const OFFSET: i32 = 3;
+const OFFSET: i32 = 8;
 #[derive(Debug)]
 pub struct TextDisplay<'a, const TEXT_ROW_LENGTH: usize> {
     rows: [String<TEXT_ROW_LENGTH>; ROWS],
@@ -29,6 +29,7 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
         let style = MonoTextStyleBuilder::new()
             .text_color(Rgb888::new(255, 255, 255))
             .background_color(Rgb888::BLACK)
+            .font(&FONT_6X9)
             .build();
 
         TextDisplay {
@@ -98,12 +99,11 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
 
     pub fn update<T: DrawTarget<Color = Rgb888>>(&mut self, target: &mut T) {
         for i in 0..ROWS {
-            let current_style = &mut self.style[i];
 
             Text::new(
                 self.rows[i].as_str(),
                 Point::new(0, OFFSET + (i as i32 * 9)),
-                current_style.clone(),
+                self.style[i].clone(),
             )
             .draw(target)
             .ok();
