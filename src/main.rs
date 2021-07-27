@@ -9,6 +9,7 @@ use crate::command_interpreter::interpret_command;
 use display::text_display::TextDisplay;
 use display::DisplayMode;
 use heapless::String;
+use stm32f1xx_hal::pac::TIM3;
 
 use cortex_m::asm::delay;
 use cortex_m::peripheral::NVIC;
@@ -51,8 +52,9 @@ const PIN_POS: Pins = Pins {
 };
 
 static mut DISPLAY: Option<Hub75<PIN_POS, DOUBLE_SCREEN_WIDTH>> = None;
+static mut DISPLAY_MODE: DisplayMode<256> = DisplayMode::DirectMode;
 static mut DELAY: Option<Delay> = None;
-static mut INT_TIMER: Option<CountDownTimer<TIM2>> = None;
+static mut DRAW_TIMER: Option<CountDownTimer<TIM2>> = None;
 
 static mut USB_BUS: Option<UsbBusAllocator<UsbBusType>> = None;
 static mut USB_SERIAL: Option<usbd_serial::SerialPort<UsbBusType>> = None;
@@ -127,34 +129,36 @@ fn main() -> ! {
         NVIC::unmask(Interrupt::USB_HP_CAN_TX);
         NVIC::unmask(Interrupt::USB_LP_CAN_RX0);
         NVIC::unmask(Interrupt::TIM2);
+        NVIC::unmask(Interrupt::TIM3);
 
         DELAY = Some(Delay::new(p.SYST, clocks));
     }
 
-    let display_mode = DisplayMode::TextMode(TextDisplay::<256>::new());
+    unsafe {
+        DISPLAY_MODE = DisplayMode::TextMode(TextDisplay::<256>::new());
 
-    match display_mode {
-        DisplayMode::TextMode(mut tm) => {
-            tm.write(0, String::from("ABCDEabcde"));
-            tm.write(1, String::from("ABCDEabcde"));
-            tm.write(2, String::from("ABCDEabcde"));
-            tm.set_color(0, (0, 255, 0));
-            tm.set_color(1, (255, 0, 0));
-            tm.set_color(2, (0, 0, 255));
-            tm.set_font(1, Font::Ibm);
-            tm.set_font(2, Font::ProFont);
-            unsafe { tm.update(DISPLAY.as_mut().unwrap()) }
+        match &mut DISPLAY_MODE {
+            DisplayMode::TextMode(tm) => {
+                tm.write(0, String::from("ABCDEabcde")).ok();
+                tm.write(1, String::from("ABCDEabcde")).ok();
+                tm.write(2, String::from("ABCDEabcde")).ok();
+                tm.set_color(0, (0, 255, 0)).ok();
+                tm.set_color(1, (255, 0, 0)).ok();
+                tm.set_color(2, (0, 0, 255)).ok();
+                tm.set_font(1, Font::Ibm).ok();
+                tm.set_font(2, Font::ProFont).ok();
+                tm.update(DISPLAY.as_mut().unwrap());
+            }
+            _ => {}
         }
-        _ => {}
     }
+    let mut draw_timer = Timer::tim2(dp.TIM2, &clocks, &mut rcc.apb1).start_count_down(100.hz());
 
-    let mut timer = Timer::tim2(dp.TIM2, &clocks, &mut rcc.apb1).start_count_down(100.hz());
-    timer.listen(Event::Update);
+    draw_timer.listen(Event::Update);
 
     unsafe {
-        INT_TIMER = Some(timer);
+        DRAW_TIMER = Some(draw_timer);
     }
-
     loop {
         led.set_high().unwrap();
         delay(clocks.sysclk().0 / 10);
@@ -180,7 +184,7 @@ fn TIM2() {
             .as_mut()
             .unwrap()
             .output_bcm(DELAY.as_mut().unwrap(), 1, 100);
-        INT_TIMER.as_mut().unwrap().clear_update_interrupt_flag();
+        DRAW_TIMER.as_mut().unwrap().clear_update_interrupt_flag();
     }
 }
 
@@ -198,18 +202,28 @@ fn usb_interrupt() {
         Ok(count) if count > 0 => {
             let command = interpret_command::<256, 64>(&buf);
             match command {
-                Ok(command) => {
-                    //command.execute(mode, target, serial);
-                    serial.write("OK".as_bytes());
-                }
-                Err(err) => {
-                    //let message = get_error_message(err);
-                    //serial.write(message.as_bytes()).ok();
+                Ok(command) => unsafe {
+                    let result = command.execute(&mut DISPLAY_MODE, DISPLAY.as_mut().unwrap());
+
+                    match result {
+                        Ok(_) => {
+                            match &mut DISPLAY_MODE {
+                                DisplayMode::TextMode(tm) => tm.update(DISPLAY.as_mut().unwrap()),
+                                _ => {}
+                            };
+                            serial.write("OK".as_bytes()).ok();
+                        }
+                        Err(e) => {
+                            serial.write(e.message().as_bytes()).ok();
+                        }
+                    };
+                },
+                Err(e) => {
+                    serial.write(e.message().as_bytes()).ok();
                 }
             }
 
             serial.write(&buf).ok();
-            //hprintln!("{:?}", buf);
         }
         _ => {}
     }
