@@ -20,19 +20,21 @@ pub fn interpret_command<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize>(
         5 => Ok(Command::SetAnimation(SetAnimation::new(&buffer)?)),
         6 => Ok(Command::DrawPixel(DrawPixel::new(&buffer)?)),
         7 => Ok(Command::DrawRow(DrawRow::new(&buffer)?)),
-        8 => Ok(Command::EnableOutput),
-        9 => Ok(Command::DisableOutput),
-        10 => Ok(Command::Ping),
+        8 => Ok(Command::Clear),
+        9 => Ok(Command::EnableOutput),
+        10 => Ok(Command::DisableOutput),
+        11 => Ok(Command::Ping),
         _ => Err(DisplayError::InvalidCommand),
     }
 }
 
-pub enum Command<'a, const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> {
+pub enum Command<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> {
     Ping,
     ParamRequest,
     DisableOutput,
     EnableOutput,
-    SwitchMode(SwitchMode<'a, TEXT_ROW_LENGTH>),
+    Clear,
+    SwitchMode(SwitchMode<TEXT_ROW_LENGTH>),
     Write(Write<TEXT_ROW_LENGTH>),
     SetFont(SetFont),
     SetColor(SetColor),
@@ -41,9 +43,7 @@ pub enum Command<'a, const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> {
     DrawRow(DrawRow<ROW_LENGTH>),
 }
 
-impl<'a, const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize>
-    Command<'a, TEXT_ROW_LENGTH, ROW_LENGTH>
-{
+impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LENGTH, ROW_LENGTH> {
     pub fn execute<T: DrawTarget<Color = Rgb888>>(
         self,
         mode: &mut DisplayMode<TEXT_ROW_LENGTH>,
@@ -65,11 +65,18 @@ impl<'a, const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize>
                 Command::EnableOutput => {
                     //TODO: Implement
                 }
+                Command::SwitchMode(switch_mode) => {
+                    switch_mode.execute(mode, target)?;
+                }
                 _ => return Err(DisplayError::IncorrectMode),
             },
             DisplayMode::DirectMode => match self {
                 Command::DrawPixel(draw_pixel) => draw_pixel.execute(target)?,
                 Command::DrawRow(draw_row) => draw_row.execute(target)?,
+                Command::Clear => {
+                    target.clear(Rgb888::new(0, 0, 0)).ok();
+                    return Ok("cleared");
+                }
                 Command::Ping => return Ok("Pong"),
                 Command::ParamRequest => {
                     return Ok("Mode:Direct");
@@ -80,6 +87,9 @@ impl<'a, const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize>
                 Command::EnableOutput => {
                     //TODO: Implement
                 }
+                Command::SwitchMode(switch_mode) => {
+                    switch_mode.execute(mode, target)?;
+                }
                 _ => return Err(DisplayError::IncorrectMode),
             },
         }
@@ -87,19 +97,33 @@ impl<'a, const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize>
     }
 }
 
-pub struct SwitchMode<'a, const MAX_ROW_LENGTH: usize> {
-    mode: DisplayMode<'a, MAX_ROW_LENGTH>,
+pub struct SwitchMode<const MAX_ROW_LENGTH: usize> {
+    mode: u8,
 }
 
-impl<'a, const TEXT_ROW_LENGTH: usize> SwitchMode<'a, TEXT_ROW_LENGTH> {
+impl<const TEXT_ROW_LENGTH: usize> SwitchMode<TEXT_ROW_LENGTH> {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
-        let mode = match buffer[1] {
-            0 => DisplayMode::TextMode(TextDisplay::new()),
-            1 => DisplayMode::DirectMode,
-            _ => return Err(DisplayError::InvalidSetting),
-        };
-
+        let mode = buffer[1];
         Ok(SwitchMode { mode })
+    }
+
+    pub fn execute<T: DrawTarget<Color = Rgb888>>(
+        self,
+        mode: &mut DisplayMode<TEXT_ROW_LENGTH>,
+        target: &mut T,
+    ) -> Result<(), DisplayError> {
+        match self.mode {
+            0 => {
+                *mode = DisplayMode::TextMode(TextDisplay::new());
+                target.clear(Rgb888::new(0, 0, 0)).ok();
+            }
+            1 => {
+                *mode = DisplayMode::DirectMode;
+                target.clear(Rgb888::new(0, 0, 0)).ok();
+            }
+            _ => return Err(DisplayError::InvalidCommand),
+        }
+        Ok(())
     }
 }
 
