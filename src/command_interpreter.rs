@@ -137,12 +137,12 @@ pub struct Write<const TEXT_ROW_LENGTH: usize> {
 impl<const TEXT_ROW_LENGTH: usize> Write<TEXT_ROW_LENGTH> {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
         let row = buffer[1] as usize;
-        let terminator = buffer[2..].iter().position(|e| e.clone() == 0 ).unwrap();
+        let terminator = buffer[2..].iter().position(|e| e.clone() == 0 ).unwrap() + 2;
 
         let string = core::str::from_utf8(&buffer[2..terminator])
             .map_err(|_| DisplayError::InvalidSetting)?;
 
-        hprintln!("Terminator: {}, String: {}", terminator, string);
+        //hprintln!("Buffer: {:?} \n, Terminator: {}, String: {}",buffer, terminator, string);
 
         Ok(Write {
             text: String::from(string),
