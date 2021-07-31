@@ -6,6 +6,8 @@ use embedded_graphics::prelude::Point;
 use embedded_graphics::{Drawable, Pixel};
 use heapless::String;
 
+use cortex_m_semihosting::hprintln;
+
 pub fn interpret_command<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize>(
     buffer: &[u8],
 ) -> Result<Command<TEXT_ROW_LENGTH, ROW_LENGTH>, DisplayError> {
@@ -135,8 +137,12 @@ pub struct Write<const TEXT_ROW_LENGTH: usize> {
 impl<const TEXT_ROW_LENGTH: usize> Write<TEXT_ROW_LENGTH> {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
         let row = buffer[1] as usize;
-        let string =
-            core::str::from_utf8(&buffer[2..]).map_err(|_| DisplayError::InvalidSetting)?;
+        let terminator = buffer[2..].iter().position(|e| e.clone() == 0 ).unwrap();
+
+        let string = core::str::from_utf8(&buffer[2..terminator])
+            .map_err(|_| DisplayError::InvalidSetting)?;
+
+        hprintln!("Terminator: {}, String: {}", terminator, string);
 
         Ok(Write {
             text: String::from(string),
@@ -214,8 +220,8 @@ impl SetAnimation {
         let row = buffer[1] as usize;
         let animation = match buffer[2] {
             0 => TextAnimation::NoAnimation,
-            1 => TextAnimation::BlinkingAnimation,
-            2 => TextAnimation::SlideAnimation,
+            // 1 => TextAnimation::BlinkingAnimation,
+            // 2 => TextAnimation::SlideAnimation,
             _ => return Err(DisplayError::InvalidSetting),
         };
 

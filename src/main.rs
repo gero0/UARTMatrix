@@ -6,6 +6,10 @@ mod command_interpreter;
 mod display;
 
 use crate::command_interpreter::interpret_command;
+use crate::display::text_animations::BlinkingAnimation;
+use crate::display::text_animations::SlideAnimation;
+use crate::display::text_animations::SlideDirection;
+use crate::display::text_animations::TextAnimation;
 use display::text_display::TextDisplay;
 use display::DisplayMode;
 use heapless::String;
@@ -55,6 +59,7 @@ static mut DISPLAY: Option<Hub75<PIN_POS, DOUBLE_SCREEN_WIDTH>> = None;
 static mut DISPLAY_MODE: DisplayMode<256> = DisplayMode::DirectMode;
 static mut DELAY: Option<Delay> = None;
 static mut DRAW_TIMER: Option<CountDownTimer<TIM2>> = None;
+static mut ANIM_TIMER: Option<CountDownTimer<TIM3>> = None;
 
 static mut USB_BUS: Option<UsbBusAllocator<UsbBusType>> = None;
 static mut USB_SERIAL: Option<usbd_serial::SerialPort<UsbBusType>> = None;
@@ -139,31 +144,73 @@ fn main() -> ! {
 
         match &mut DISPLAY_MODE {
             DisplayMode::TextMode(tm) => {
-                tm.write(0, String::from("ABCDEabcde")).ok();
-                tm.write(1, String::from("ABCDEabcde")).ok();
-                tm.write(2, String::from("ABCDEabcde")).ok();
-                tm.set_color(0, (0, 255, 0)).ok();
+                tm.write(
+                    0,
+                    String::from(
+                        "Rust is cool",
+                    ),
+                )
+                .ok();
+                tm.write(
+                    1,
+                    String::from("AAAAAAAAAAA"),
+                )
+                .ok();
+                tm.write(2, String::from("Man i love crabs (\\/) (°,,°) (\\/)"))
+                    .ok();
+                tm.set_animation(
+                    0,
+                    TextAnimation::SlideAnimation(SlideAnimation::new(
+                        4,
+                        128,
+                        SlideDirection::Left,
+                    )),
+                )
+                .ok();
+                tm.set_animation(
+                    1,
+                    TextAnimation::SlideAnimation(SlideAnimation::new(
+                        2,
+                        128,
+                        SlideDirection::Left,
+                    )),
+                )
+                .ok();
+                tm.set_animation(
+                    2,
+                    TextAnimation::SlideAnimation(SlideAnimation::new(
+                        4,
+                        170,
+                        SlideDirection::Left,
+                    )),
+                )
+                .ok();
+                tm.set_color(0, (128, 128, 128)).ok();
                 tm.set_color(1, (255, 0, 0)).ok();
-                tm.set_color(2, (0, 0, 255)).ok();
+                tm.set_color(2, (240, 120, 0)).ok();
                 tm.set_font(1, Font::Ibm).ok();
                 tm.set_font(2, Font::ProFont).ok();
-                tm.update(DISPLAY.as_mut().unwrap());
             }
             _ => {}
         }
     }
     let mut draw_timer = Timer::tim2(dp.TIM2, &clocks, &mut rcc.apb1).start_count_down(100.hz());
+    let mut anim_timer = Timer::tim3(dp.TIM3, &clocks, &mut rcc.apb1).start_count_down(60.hz());
 
     draw_timer.listen(Event::Update);
+    anim_timer.listen(Event::Update);
 
     unsafe {
         DRAW_TIMER = Some(draw_timer);
+        ANIM_TIMER = Some(anim_timer);
     }
     loop {
-        led.set_high().unwrap();
-        delay(clocks.sysclk().0 / 10);
-        led.set_low().unwrap();
-        delay(clocks.sysclk().0 / 10);
+        unsafe {
+            match &mut DISPLAY_MODE {
+                DisplayMode::TextMode(tm) => tm.update(DISPLAY.as_mut().unwrap()),
+                _ => {}
+            };
+        }
     }
 }
 
@@ -178,14 +225,21 @@ fn USB_LP_CAN_RX0() {
 }
 
 #[interrupt]
-fn TIM2() {
-    unsafe {
-        DISPLAY
-            .as_mut()
-            .unwrap()
-            .output_bcm(DELAY.as_mut().unwrap(), 1, 100);
-        DRAW_TIMER.as_mut().unwrap().clear_update_interrupt_flag();
-    }
+unsafe fn TIM2() {
+    DISPLAY
+        .as_mut()
+        .unwrap()
+        .output_bcm(DELAY.as_mut().unwrap(), 1, 100);
+    DRAW_TIMER.as_mut().unwrap().clear_update_interrupt_flag();
+}
+
+#[interrupt]
+unsafe fn TIM3() {
+    match &mut DISPLAY_MODE {
+        DisplayMode::TextMode(tm) => tm.anim_tick(),
+        _ => {}
+    };
+    ANIM_TIMER.as_mut().unwrap().clear_update_interrupt_flag();
 }
 
 fn usb_interrupt() {
@@ -207,10 +261,6 @@ fn usb_interrupt() {
 
                     match result {
                         Ok(_) => {
-                            match &mut DISPLAY_MODE {
-                                DisplayMode::TextMode(tm) => tm.update(DISPLAY.as_mut().unwrap()),
-                                _ => {}
-                            };
                             serial.write("OK".as_bytes()).ok();
                         }
                         Err(e) => {

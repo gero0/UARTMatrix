@@ -1,3 +1,4 @@
+use crate::display::text_animations::AnimationState;
 use heapless::String;
 
 use embedded_graphics::{
@@ -5,7 +6,7 @@ use embedded_graphics::{
     mono_font::{MonoTextStyle, MonoTextStyleBuilder},
     pixelcolor::{Rgb888, RgbColor},
     prelude::Point,
-    text::{Text, Baseline},
+    text::{Baseline, Text},
     Drawable,
 };
 
@@ -99,14 +100,26 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
 
     pub fn update<T: DrawTarget<Color = Rgb888>>(&mut self, target: &mut T) {
         for i in 0..ROWS {
+            let anim_state = self.animation[i].get();
 
-            Text::new(
-                self.rows[i].as_str(),
-                Point::new(0, OFFSET + (i as i32 * 9)),
-                self.style[i].clone(),
-            )
-            .draw(target)
-            .ok();
+            if anim_state.visible {
+                Text::new(
+                    self.rows[i].as_str(),
+                    Point::new(
+                        0 + anim_state.x_offset,
+                        OFFSET + (i as i32 * 9) + anim_state.y_offset,
+                    ),
+                    self.style[i].clone(),
+                )
+                .draw(target)
+                .ok();
+            }
+        }
+    }
+
+    pub fn anim_tick(&mut self) {
+        for i in 0..ROWS {
+            self.animation[i].tick();
         }
     }
 }
