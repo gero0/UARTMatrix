@@ -1,5 +1,7 @@
 use crate::display::{font::Font, text_animations::TextAnimation, DisplayError, TextDisplay};
+use crate::BlinkingAnimation;
 use crate::DisplayMode;
+use crate::{SlideAnimation, SlideDirection};
 use embedded_graphics::draw_target::DrawTarget;
 use embedded_graphics::pixelcolor::Rgb888;
 use embedded_graphics::prelude::Point;
@@ -95,6 +97,7 @@ impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LEN
                 _ => return Err(DisplayError::IncorrectMode),
             },
         }
+        target.clear(Rgb888::new(0,0,0)).ok();
         Ok("OK")
     }
 }
@@ -137,7 +140,7 @@ pub struct Write<const TEXT_ROW_LENGTH: usize> {
 impl<const TEXT_ROW_LENGTH: usize> Write<TEXT_ROW_LENGTH> {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
         let row = buffer[1] as usize;
-        let terminator = buffer[2..].iter().position(|e| e.clone() == 0 ).unwrap() + 2;
+        let terminator = buffer[2..].iter().position(|e| e.clone() == 0).unwrap() + 2;
 
         let string = core::str::from_utf8(&buffer[2..terminator])
             .map_err(|_| DisplayError::InvalidSetting)?;
@@ -220,8 +223,19 @@ impl SetAnimation {
         let row = buffer[1] as usize;
         let animation = match buffer[2] {
             0 => TextAnimation::NoAnimation,
-            // 1 => TextAnimation::BlinkingAnimation,
-            // 2 => TextAnimation::SlideAnimation,
+            1 => {
+                let anim = BlinkingAnimation::new(buffer[3] as i32);
+                TextAnimation::BlinkingAnimation(anim)
+            }
+            2 => {
+                let dir = match buffer[4] {
+                    1 => SlideDirection::Right,
+                    _ => SlideDirection::Left,
+                };
+
+                let anim = SlideAnimation::new(buffer[3] as i32, dir);
+                TextAnimation::SlideAnimation(anim)
+            }
             _ => return Err(DisplayError::InvalidSetting),
         };
 

@@ -41,22 +41,22 @@ pub enum SlideDirection {
 
 #[derive(Debug, Clone, Copy)]
 pub struct SlideAnimation {
-    x_offset: i32,
-    //ticks between moving one pixel
-    tempo: i32,
-    counter: i32,
     //TODO: Better name?
-    slide_length: usize,
-    direction: SlideDirection,
+    pub slide_length: usize,
+    pub direction: SlideDirection,
+    //ticks between moving one pixel
+    pub tempo: i32,
+    x_offset: i32,
+    counter: i32,
 }
 
 impl SlideAnimation {
-    pub fn new(tempo: i32, slide_length: usize, direction: SlideDirection) -> Self {
+    pub fn new(tempo: i32, direction: SlideDirection) -> Self {
         SlideAnimation {
             x_offset: 0,
             counter: 0,
             tempo,
-            slide_length,
+            slide_length: 0,
             direction,
         }
     }
@@ -70,7 +70,7 @@ impl SlideAnimation {
                 SlideDirection::Right => {
                     self.x_offset += 1;
                     if self.x_offset > self.slide_length as i32 {
-                        self.x_offset = -(2* self.slide_length as i32)
+                        self.x_offset = -(2 * self.slide_length as i32)
                     }
                 }
                 SlideDirection::Left => {
@@ -81,6 +81,10 @@ impl SlideAnimation {
                 }
             }
         }
+    }
+
+    pub fn set_length(&mut self, length: usize){
+        self.slide_length = length;
     }
 
     pub fn get(&mut self) -> AnimationState {

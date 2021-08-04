@@ -1,4 +1,4 @@
-use crate::display::text_animations::AnimationState;
+use crate::SlideAnimation;
 use heapless::String;
 
 use embedded_graphics::{
@@ -6,7 +6,7 @@ use embedded_graphics::{
     mono_font::{MonoTextStyle, MonoTextStyleBuilder},
     pixelcolor::{Rgb888, RgbColor},
     prelude::Point,
-    text::{Baseline, Text},
+    text::Text,
     Drawable,
 };
 
@@ -14,10 +14,18 @@ use embedded_graphics::mono_font::ascii::FONT_6X9;
 use ibm437::IBM437_8X8_NORMAL;
 use profont::PROFONT_7_POINT;
 
-use super::{font::Font, text_animations::TextAnimation, DisplayError};
+use super::{
+    font::Font,
+    text_animations::{SlideDirection, TextAnimation},
+    DisplayError,
+};
+
+use cortex_m_semihosting::hprintln;
 
 const ROWS: usize = 3;
 const OFFSET: i32 = 8;
+const LETTER_WIDTH: usize = 9;
+
 #[derive(Debug)]
 pub struct TextDisplay<'a, const TEXT_ROW_LENGTH: usize> {
     rows: [String<TEXT_ROW_LENGTH>; ROWS],
@@ -47,6 +55,10 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
     pub fn write(&mut self, row: usize, text: String<TEXT_ROW_LENGTH>) -> Result<(), DisplayError> {
         if row >= ROWS {
             return Err(DisplayError::OutOfBounds);
+        }
+
+        if let TextAnimation::SlideAnimation(ref mut anim) = &mut self.animation[row] {
+            update_slide_length(anim, text.len())
         }
 
         self.rows[row] = text;
@@ -87,10 +99,14 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
     pub fn set_animation(
         &mut self,
         row: usize,
-        animation: TextAnimation,
+        mut animation: TextAnimation,
     ) -> Result<(), DisplayError> {
         if row >= ROWS {
             return Err(DisplayError::OutOfBounds);
+        }
+
+        if let TextAnimation::SlideAnimation(ref mut anim) = animation {
+            update_slide_length(anim, self.rows[row].len())
         }
 
         self.animation[row] = animation;
@@ -113,6 +129,18 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
                 )
                 .draw(target)
                 .ok();
+            }else{
+                //Because clearing the display would take too much time ;)
+                Text::new(
+                    "                                  ",
+                    Point::new(
+                        0 + anim_state.x_offset,
+                        OFFSET + (i as i32 * 9) + anim_state.y_offset,
+                    ),
+                    self.style[i].clone(),
+                )
+                .draw(target)
+                .ok();
             }
         }
     }
@@ -122,4 +150,8 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
             self.animation[i].tick();
         }
     }
+}
+
+fn update_slide_length(anim: &mut SlideAnimation, text_len: usize) {
+    anim.set_length((text_len + 2) * LETTER_WIDTH);
 }

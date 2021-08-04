@@ -144,45 +144,23 @@ fn main() -> ! {
 
         match &mut DISPLAY_MODE {
             DisplayMode::TextMode(tm) => {
-                tm.write(
-                    0,
-                    String::from(
-                        "Rust is cool",
-                    ),
-                )
-                .ok();
-                tm.write(
-                    1,
-                    String::from("AAAAAAAAAAA"),
-                )
-                .ok();
+                tm.write(0, String::from("Rust is cool")).ok();
+                tm.write(1, String::from("AAAAAAAAAAA")).ok();
                 tm.write(2, String::from("Man i love crabs (\\/) (°,,°) (\\/)"))
                     .ok();
                 tm.set_animation(
                     0,
-                    TextAnimation::SlideAnimation(SlideAnimation::new(
-                        4,
-                        128,
-                        SlideDirection::Left,
-                    )),
+                    TextAnimation::SlideAnimation(SlideAnimation::new(4, SlideDirection::Left)),
                 )
                 .ok();
                 tm.set_animation(
                     1,
-                    TextAnimation::SlideAnimation(SlideAnimation::new(
-                        2,
-                        128,
-                        SlideDirection::Left,
-                    )),
+                    TextAnimation::BlinkingAnimation(BlinkingAnimation::new(64)),
                 )
                 .ok();
                 tm.set_animation(
                     2,
-                    TextAnimation::SlideAnimation(SlideAnimation::new(
-                        4,
-                        170,
-                        SlideDirection::Left,
-                    )),
+                    TextAnimation::SlideAnimation(SlideAnimation::new(4, SlideDirection::Left)),
                 )
                 .ok();
                 tm.set_color(0, (128, 128, 128)).ok();
