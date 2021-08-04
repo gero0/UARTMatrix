@@ -19,6 +19,7 @@ while True:
         data = list(itertools.chain.from_iterable(a))
 
         ser.write([2, int(args[1])] + data)
+
     elif cmd == "font":
         font = args[2]
         if font == "ibm":
@@ -27,6 +28,16 @@ while True:
             ser.write([3, int(args[1]), 1])
         else:
             ser.write([3, int(args[1]), 0])
+
+    elif cmd == "anim":
+        anim = args[2]
+        if anim == "blink":
+            ser.write([5, int(args[1]), 1, int(args[3])])
+        elif anim == "slide":
+            ser.write([5, int(args[1]), 2, int(args[3]), int(args[4])])
+        else:
+            ser.write([5, int(args[1]), 0])
+
     elif cmd == "px":
         ser.write([6, int(args[1]), int(args[2]), int(
             args[3]), int(args[4]), int(args[5])])
