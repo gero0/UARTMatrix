@@ -38,6 +38,10 @@ while True:
         ser.write([1, 0])
     elif cmd == "clear":
         ser.write([8])
+    elif cmd == "oe":
+        ser.write([9])
+    elif cmd == "od":
+        ser.write([10])
     else:
         ser.close()
         break

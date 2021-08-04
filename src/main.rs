@@ -60,6 +60,7 @@ static mut DISPLAY_MODE: DisplayMode<256> = DisplayMode::DirectMode;
 static mut DELAY: Option<Delay> = None;
 static mut DRAW_TIMER: Option<CountDownTimer<TIM2>> = None;
 static mut ANIM_TIMER: Option<CountDownTimer<TIM3>> = None;
+static mut OUTPUT_ENABLED: bool = true;
 
 static mut USB_BUS: Option<UsbBusAllocator<UsbBusType>> = None;
 static mut USB_SERIAL: Option<usbd_serial::SerialPort<UsbBusType>> = None;
@@ -204,10 +205,12 @@ fn USB_LP_CAN_RX0() {
 
 #[interrupt]
 unsafe fn TIM2() {
-    DISPLAY
-        .as_mut()
-        .unwrap()
-        .output_bcm(DELAY.as_mut().unwrap(), 1, 100);
+    if OUTPUT_ENABLED {
+        DISPLAY
+            .as_mut()
+            .unwrap()
+            .output_bcm(DELAY.as_mut().unwrap(), 1, 100);
+    }
     DRAW_TIMER.as_mut().unwrap().clear_update_interrupt_flag();
 }
 
@@ -235,7 +238,11 @@ fn usb_interrupt() {
             let command = interpret_command::<256, 64>(&buf);
             match command {
                 Ok(command) => unsafe {
-                    let result = command.execute(&mut DISPLAY_MODE, DISPLAY.as_mut().unwrap());
+                    let result = command.execute(
+                        &mut DISPLAY_MODE,
+                        DISPLAY.as_mut().unwrap(),
+                        &mut OUTPUT_ENABLED,
+                    );
 
                     match result {
                         Ok(_) => {

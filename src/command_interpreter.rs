@@ -52,28 +52,28 @@ impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LEN
         self,
         mode: &mut DisplayMode<TEXT_ROW_LENGTH>,
         target: &mut T,
+        oe: &mut bool,
     ) -> Result<&'static str, DisplayError> {
         match mode {
-            DisplayMode::TextMode(text_display) => match self {
-                Command::Write(write) => write.execute(text_display)?,
-                Command::SetFont(set_font) => set_font.execute(text_display)?,
-                Command::SetColor(set_color) => set_color.execute(text_display)?,
-                Command::SetAnimation(set_animation) => set_animation.execute(text_display)?,
-                Command::Ping => return Ok("Pong"),
-                Command::ParamRequest => {
-                    return Ok("Mode:Text");
+            DisplayMode::TextMode(text_display) => {
+                match self {
+                    Command::Write(write) => write.execute(text_display)?,
+                    Command::SetFont(set_font) => set_font.execute(text_display)?,
+                    Command::SetColor(set_color) => set_color.execute(text_display)?,
+                    Command::SetAnimation(set_animation) => set_animation.execute(text_display)?,
+                    Command::Ping => return Ok("Pong"),
+                    Command::ParamRequest => return Ok("Mode:Text"),
+                    Command::DisableOutput => {
+                        *oe = false;
+                    }
+                    Command::EnableOutput => {
+                        *oe = true;
+                    }
+                    Command::SwitchMode(switch_mode) => switch_mode.execute(mode, target)?,
+                    _ => return Err(DisplayError::IncorrectMode),
                 }
-                Command::DisableOutput => {
-                    //TODO: Implement
-                }
-                Command::EnableOutput => {
-                    //TODO: Implement
-                }
-                Command::SwitchMode(switch_mode) => {
-                    switch_mode.execute(mode, target)?;
-                }
-                _ => return Err(DisplayError::IncorrectMode),
-            },
+                target.clear(Rgb888::new(0, 0, 0)).ok();
+            }
             DisplayMode::DirectMode => match self {
                 Command::DrawPixel(draw_pixel) => draw_pixel.execute(target)?,
                 Command::DrawRow(draw_row) => draw_row.execute(target)?,
@@ -86,10 +86,10 @@ impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LEN
                     return Ok("Mode:Direct");
                 }
                 Command::DisableOutput => {
-                    //TODO: Implement
+                    *oe = false;
                 }
                 Command::EnableOutput => {
-                    //TODO: Implement
+                    *oe = true;
                 }
                 Command::SwitchMode(switch_mode) => {
                     switch_mode.execute(mode, target)?;
@@ -97,7 +97,6 @@ impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LEN
                 _ => return Err(DisplayError::IncorrectMode),
             },
         }
-        target.clear(Rgb888::new(0,0,0)).ok();
         Ok("OK")
     }
 }
