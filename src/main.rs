@@ -83,14 +83,13 @@ static mut USB_DEVICE: Option<UsbDevice<UsbBusType>> = None;
 
 #[entry]
 fn main() -> ! {
-    let p = cortex_m::Peripherals::take().unwrap();
+    let mut p = cortex_m::Peripherals::take().unwrap();
     let dp = Peripherals::take().unwrap();
 
     let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
 
     let mut afio = dp.AFIO.constrain(&mut rcc.apb2);
-    let channels = dp.DMA1.split(&mut rcc.ahb);
 
     let clocks = rcc
         .cfgr
@@ -127,7 +126,7 @@ fn main() -> ! {
         dp.USART1,
         (tx, rx),
         &mut afio.mapr,
-        Config::default().baudrate(115_200.bps()),
+        Config::default().baudrate(9600.bps()),
         clocks,
         &mut rcc.apb2,
     );
@@ -169,6 +168,12 @@ fn main() -> ! {
 
         USB_DEVICE = Some(usb_dev);
         DISPLAY = Some(Hub75::new(4, &mut *(0x40010C0C as *mut u16)));
+
+        p.NVIC.set_priority(Interrupt::USART1, 16);
+        p.NVIC.set_priority(Interrupt::TIM2, 32);
+        p.NVIC.set_priority(Interrupt::TIM3, 32);
+        p.NVIC.set_priority(Interrupt::USB_HP_CAN_TX, 64);
+        p.NVIC.set_priority(Interrupt::USB_LP_CAN_RX0, 64);
 
         NVIC::unmask(Interrupt::USART1);
         NVIC::unmask(Interrupt::USB_HP_CAN_TX);
@@ -234,11 +239,19 @@ fn main() -> ! {
 
 #[interrupt]
 unsafe fn USART1() {
-    let result = SERIAL.as_mut().unwrap().read();
+    let serial = SERIAL.as_mut().unwrap();
+    let result = serial.read();
     if let Ok(byte) = result {
-        //hprintln!("{}", byte);
         UARTCONTROLLER.as_mut().unwrap().read_byte(byte);
     }
+
+    let command = UARTCONTROLLER.as_mut().unwrap().get_command();
+
+    if let Some(c) = command {
+        let response = parse_command(&c);
+    }
+
+    serial.listen(stm32f1xx_hal::serial::Event::Rxne);
 }
 
 #[interrupt]
@@ -283,7 +296,7 @@ fn usb_interrupt() {
 
     match serial.read(&mut buf) {
         Ok(count) if count > 0 => {
-            let response = parse_command(&buf);
+            let response = parse_command(&buf[4..]);
             serial.write(response).ok();
         }
         _ => {}
