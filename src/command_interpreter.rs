@@ -1,14 +1,15 @@
-use crate::display::{font::Font, text_animations::TextAnimation, DisplayError, TextDisplay};
-use crate::BlinkingAnimation;
-use crate::DisplayMode;
-use crate::{SlideAnimation, SlideDirection};
-use embedded_graphics::draw_target::DrawTarget;
-use embedded_graphics::pixelcolor::Rgb888;
-use embedded_graphics::prelude::Point;
-use embedded_graphics::{Drawable, Pixel};
+use crate::{
+    display::{font::Font, text_animations::TextAnimation, DisplayError, TextDisplay},
+    BlinkingAnimation, DisplayMode, SlideAnimation, SlideDirection,
+};
+use embedded_graphics::{
+    draw_target::DrawTarget,
+    pixelcolor::Rgb888,
+    prelude::{Point, Primitive},
+    primitives::{Circle, Line, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle, Triangle},
+    Drawable, Pixel,
+};
 use heapless::String;
-
-use cortex_m_semihosting::hprintln;
 
 pub fn interpret_command<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize>(
     buffer: &[u8],
@@ -24,10 +25,14 @@ pub fn interpret_command<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize>(
         5 => Ok(Command::SetAnimation(SetAnimation::new(&buffer)?)),
         6 => Ok(Command::DrawPixel(DrawPixel::new(&buffer)?)),
         7 => Ok(Command::DrawRow(DrawRow::new(&buffer)?)),
-        8 => Ok(Command::Clear),
-        9 => Ok(Command::EnableOutput),
-        10 => Ok(Command::DisableOutput),
-        11 => Ok(Command::Ping),
+        8 => Ok(Command::DrawLine(DrawLine::new(&buffer)?)),
+        9 => Ok(Command::DrawRectangle(DrawRectangle::new(&buffer)?)),
+        10 => Ok(Command::DrawTriangle(DrawTriangle::new(&buffer)?)),
+        11 => Ok(Command::DrawCircle(DrawCircle::new(&buffer)?)),
+        12 => Ok(Command::Clear),
+        13 => Ok(Command::EnableOutput),
+        14 => Ok(Command::DisableOutput),
+        15 => Ok(Command::Ping),
         _ => Err(DisplayError::InvalidCommand),
     }
 }
@@ -45,6 +50,10 @@ pub enum Command<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> {
     SetAnimation(SetAnimation),
     DrawPixel(DrawPixel),
     DrawRow(DrawRow<ROW_LENGTH>),
+    DrawLine(DrawLine),
+    DrawRectangle(DrawRectangle),
+    DrawTriangle(DrawTriangle),
+    DrawCircle(DrawCircle),
 }
 
 impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LENGTH, ROW_LENGTH> {
@@ -77,6 +86,10 @@ impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LEN
             DisplayMode::DirectMode => match self {
                 Command::DrawPixel(draw_pixel) => draw_pixel.execute(target)?,
                 Command::DrawRow(draw_row) => draw_row.execute(target)?,
+                Command::DrawLine(draw_line) => draw_line.execute(target)?,
+                Command::DrawRectangle(draw_rectangle) => draw_rectangle.execute(target)?,
+                Command::DrawTriangle(draw_triangle) => draw_triangle.execute(target)?,
+                Command::DrawCircle(draw_circle) => draw_circle.execute(target)?,
                 Command::Clear => {
                     target.clear(Rgb888::new(0, 0, 0)).ok();
                     return Ok("cleared");
@@ -143,8 +156,6 @@ impl<const TEXT_ROW_LENGTH: usize> Write<TEXT_ROW_LENGTH> {
 
         let string = core::str::from_utf8(&buffer[2..terminator])
             .map_err(|_| DisplayError::InvalidSetting)?;
-
-        //hprintln!("Buffer: {:?} \n, Terminator: {}, String: {}",buffer, terminator, string);
 
         Ok(Write {
             text: String::from(string),
@@ -311,6 +322,203 @@ impl<const ROW_LENGTH: usize> DrawRow<ROW_LENGTH> {
 
         target
             .draw_iter(pixels)
+            .map_err(|_| DisplayError::DrawError)?;
+
+        Ok(())
+    }
+}
+
+pub struct DrawLine {
+    point_a: (u8, u8),
+    point_b: (u8, u8),
+    thickness: u8,
+    color: Rgb888,
+}
+
+impl DrawLine {
+    pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
+        Ok(DrawLine {
+            point_a: (buffer[1], buffer[2]),
+            point_b: (buffer[3], buffer[4]),
+            thickness: buffer[5],
+            color: Rgb888::new(buffer[6], buffer[7], buffer[8]),
+        })
+    }
+
+    pub fn execute<T: DrawTarget<Color = Rgb888>>(
+        self,
+        target: &mut T,
+    ) -> Result<(), DisplayError> {
+        let (x1, y1) = self.point_a;
+        let (x2, y2) = self.point_b;
+        Line::new(
+            Point::new(x1 as i32, y1 as i32),
+            Point::new(x2 as i32, y2 as i32),
+        )
+        .into_styled(PrimitiveStyle::with_stroke(
+            self.color,
+            self.thickness as u32,
+        ))
+        .draw(target)
+        .map_err(|_| DisplayError::DrawError)?;
+
+        Ok(())
+    }
+}
+
+pub struct DrawRectangle {
+    point_a: (u8, u8),
+    point_b: (u8, u8),
+    thickness: u8,
+    color: Rgb888,
+    filled: bool,
+}
+
+impl DrawRectangle {
+    pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
+        let filled = match buffer[9] {
+            0 => false,
+            _ => true,
+        };
+
+        Ok(DrawRectangle {
+            point_a: (buffer[1], buffer[2]),
+            point_b: (buffer[3], buffer[4]),
+            thickness: buffer[5],
+            color: Rgb888::new(buffer[6], buffer[7], buffer[8]),
+            filled,
+        })
+    }
+
+    pub fn execute<T: DrawTarget<Color = Rgb888>>(
+        self,
+        target: &mut T,
+    ) -> Result<(), DisplayError> {
+        let (x1, y1) = self.point_a;
+        let (x2, y2) = self.point_b;
+
+        let style = PrimitiveStyleBuilder::new()
+            .stroke_color(self.color)
+            .stroke_width(self.thickness as u32);
+
+        if self.filled {
+            style.fill_color(self.color);
+        }
+
+        let style = style.build();
+
+        Rectangle::with_corners(
+            Point::new(x1 as i32, y1 as i32),
+            Point::new(x2 as i32, y2 as i32),
+        )
+        .into_styled(style)
+        .draw(target)
+        .map_err(|_| DisplayError::DrawError)?;
+
+        Ok(())
+    }
+}
+
+pub struct DrawTriangle {
+    point_a: (u8, u8),
+    point_b: (u8, u8),
+    point_c: (u8, u8),
+    thickness: u8,
+    color: Rgb888,
+    filled: bool,
+}
+
+impl DrawTriangle {
+    pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
+        let filled = match buffer[11] {
+            0 => false,
+            _ => true,
+        };
+
+        Ok(DrawTriangle {
+            point_a: (buffer[1], buffer[2]),
+            point_b: (buffer[3], buffer[4]),
+            point_c: (buffer[5], buffer[6]),
+            thickness: buffer[7],
+            color: Rgb888::new(buffer[8], buffer[9], buffer[10]),
+            filled,
+        })
+    }
+
+    pub fn execute<T: DrawTarget<Color = Rgb888>>(
+        self,
+        target: &mut T,
+    ) -> Result<(), DisplayError> {
+        let (x1, y1) = self.point_a;
+        let (x2, y2) = self.point_b;
+        let (x3, y3) = self.point_c;
+
+        let style = PrimitiveStyleBuilder::new()
+            .stroke_color(self.color)
+            .stroke_width(self.thickness as u32);
+
+        if self.filled {
+            style.fill_color(self.color);
+        }
+
+        let style = style.build();
+
+        Triangle::new(
+            Point::new(x1 as i32, y1 as i32),
+            Point::new(x2 as i32, y2 as i32),
+            Point::new(x3 as i32, y3 as i32),
+        )
+        .into_styled(style)
+        .draw(target)
+        .map_err(|_| DisplayError::DrawError)?;
+
+        Ok(())
+    }
+}
+
+pub struct DrawCircle {
+    center: (u8, u8),
+    radius: u8,
+    thickness: u8,
+    color: Rgb888,
+    filled: bool,
+}
+
+impl DrawCircle {
+    pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
+        let filled = match buffer[7] {
+            0 => false,
+            _ => true,
+        };
+
+        Ok(DrawCircle {
+            center: (buffer[1], buffer[2]),
+            radius: buffer[3],
+            thickness: buffer[4],
+            color: Rgb888::new(buffer[5], buffer[6], buffer[7]),
+            filled,
+        })
+    }
+
+    pub fn execute<T: DrawTarget<Color = Rgb888>>(
+        self,
+        target: &mut T,
+    ) -> Result<(), DisplayError> {
+        let (x1, y1) = self.center;
+
+        let style = PrimitiveStyleBuilder::new()
+            .stroke_color(self.color)
+            .stroke_width(self.thickness as u32);
+
+        if self.filled {
+            style.fill_color(self.color);
+        }
+
+        let style = style.build();
+
+        Circle::new(Point::new(x1 as i32, y1 as i32), self.radius as u32)
+            .into_styled(style)
+            .draw(target)
             .map_err(|_| DisplayError::DrawError)?;
 
         Ok(())
