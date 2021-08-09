@@ -16,11 +16,9 @@ use profont::PROFONT_7_POINT;
 
 use super::{
     font::Font,
-    text_animations::{SlideDirection, TextAnimation},
+    text_animations::TextAnimation,
     DisplayError,
 };
-
-use cortex_m_semihosting::hprintln;
 
 const ROWS: usize = 3;
 const OFFSET: i32 = 8;

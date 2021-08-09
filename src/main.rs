@@ -5,34 +5,32 @@
 mod command_interpreter;
 mod display;
 
-use crate::command_interpreter::interpret_command;
-use crate::display::text_animations::BlinkingAnimation;
-use crate::display::text_animations::SlideAnimation;
-use crate::display::text_animations::SlideDirection;
-use crate::display::text_animations::TextAnimation;
-use display::text_display::TextDisplay;
-use display::DisplayMode;
-use heapless::String;
-use stm32f1xx_hal::pac::TIM3;
-
-use cortex_m::asm::delay;
-use cortex_m::peripheral::NVIC;
-use cortex_m_rt::entry;
-use stm32f1xx_hal::pac::TIM2;
-use stm32f1xx_hal::timer::CountDownTimer;
+use crate::{
+    command_interpreter::interpret_command,
+    display::{
+        font::Font,
+        text_animations::{BlinkingAnimation, SlideAnimation, SlideDirection, TextAnimation},
+        text_display::TextDisplay,
+        DisplayMode,
+    },
+};
 
 use embedded_hal::digital::v2::OutputPin;
-use stm32f1xx_hal::delay::Delay;
-use stm32f1xx_hal::pac::Peripherals;
-use stm32f1xx_hal::pac::{interrupt, Interrupt};
-use stm32f1xx_hal::prelude::*;
-use stm32f1xx_hal::timer::{Event, Timer};
-use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
+use stm32f1xx_hal::{
+    delay::Delay,
+    pac::{interrupt, Interrupt, Peripherals, TIM2, TIM3},
+    prelude::*,
+    timer::{CountDownTimer, Event, Timer},
+    usb::{Peripheral, UsbBus, UsbBusType},
+};
+
+use heapless::String;
+
+use cortex_m::{asm::delay, peripheral::NVIC};
+use cortex_m_rt::entry;
 
 use usb_device::{bus::UsbBusAllocator, prelude::*};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
-
-use display::font::Font;
 
 use hub75::{Hub75, Pins};
 
@@ -99,7 +97,7 @@ fn main() -> ! {
     let mut _latch = gpiob.pb13.into_push_pull_output(&mut gpiob.crh);
     let mut _oe = gpiob.pb14.into_push_pull_output(&mut gpiob.crh);
 
-    let mut led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
+    let mut _led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
 
     // BluePill board has a pull-up resistor on the D+ line.
     // Pull the D+ pin down to send a RESET condition to the USB bus.
