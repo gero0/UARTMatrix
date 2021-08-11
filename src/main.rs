@@ -4,9 +4,11 @@
 
 mod command_interpreter;
 mod display;
+mod uart;
 
 use crate::{
     command_interpreter::interpret_command,
+    uart::UartController,
     display::{
         font::Font,
         text_animations::{BlinkingAnimation, SlideAnimation, SlideDirection, TextAnimation},
@@ -15,19 +17,21 @@ use crate::{
     },
 };
 
+use cortex_m::{asm::delay, peripheral::NVIC};
+use cortex_m_rt::entry;
+
 use embedded_hal::digital::v2::OutputPin;
 use stm32f1xx_hal::{
     delay::Delay,
-    pac::{interrupt, Interrupt, Peripherals, TIM2, TIM3},
+    gpio::{gpioa::PA10, gpioa::PA9, Alternate, Floating, Input, PushPull},
+    pac::{interrupt, Interrupt, Peripherals, TIM2, TIM3, USART1},
     prelude::*,
+    serial::{Config, Serial},
     timer::{CountDownTimer, Event, Timer},
     usb::{Peripheral, UsbBus, UsbBusType},
 };
 
 use heapless::String;
-
-use cortex_m::{asm::delay, peripheral::NVIC};
-use cortex_m_rt::entry;
 
 use usb_device::{bus::UsbBusAllocator, prelude::*};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
@@ -53,6 +57,9 @@ const PIN_POS: Pins = Pins {
     oe: 14,
 };
 
+static mut SERIAL: Option<Serial<USART1, (PA9<Alternate<PushPull>>, PA10<Input<Floating>>)>> = None;
+static mut UARTCONTROLLER: Option<UartController<512>> = None;
+
 static mut DISPLAY: Option<Hub75<PIN_POS, DOUBLE_SCREEN_WIDTH>> = None;
 static mut DISPLAY_MODE: DisplayMode<256> = DisplayMode::DirectMode;
 static mut DELAY: Option<Delay> = None;
@@ -66,11 +73,13 @@ static mut USB_DEVICE: Option<UsbDevice<UsbBusType>> = None;
 
 #[entry]
 fn main() -> ! {
-    let p = cortex_m::Peripherals::take().unwrap();
+    let mut p = cortex_m::Peripherals::take().unwrap();
     let dp = Peripherals::take().unwrap();
 
     let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
+
+    let mut afio = dp.AFIO.constrain(&mut rcc.apb2);
 
     let clocks = rcc
         .cfgr
@@ -98,6 +107,26 @@ fn main() -> ! {
     let mut _oe = gpiob.pb14.into_push_pull_output(&mut gpiob.crh);
 
     let mut _led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
+
+    // USART1
+    let tx = gpioa.pa9.into_alternate_push_pull(&mut gpioa.crh);
+    let rx = gpioa.pa10;
+
+    let mut serial = Serial::usart1(
+        dp.USART1,
+        (tx, rx),
+        &mut afio.mapr,
+        Config::default().baudrate(9600.bps()),
+        clocks,
+        &mut rcc.apb2,
+    );
+
+    serial.listen(stm32f1xx_hal::serial::Event::Rxne);
+
+    unsafe {
+        UARTCONTROLLER = Some(UartController::new());
+        SERIAL = Some(serial);
+    }
 
     // BluePill board has a pull-up resistor on the D+ line.
     // Pull the D+ pin down to send a RESET condition to the USB bus.
@@ -130,6 +159,13 @@ fn main() -> ! {
         USB_DEVICE = Some(usb_dev);
         DISPLAY = Some(Hub75::new(4, &mut *(0x40010C0C as *mut u16)));
 
+        p.NVIC.set_priority(Interrupt::USART1, 16);
+        p.NVIC.set_priority(Interrupt::TIM2, 32);
+        p.NVIC.set_priority(Interrupt::TIM3, 32);
+        p.NVIC.set_priority(Interrupt::USB_HP_CAN_TX, 64);
+        p.NVIC.set_priority(Interrupt::USB_LP_CAN_RX0, 64);
+
+        NVIC::unmask(Interrupt::USART1);
         NVIC::unmask(Interrupt::USB_HP_CAN_TX);
         NVIC::unmask(Interrupt::USB_LP_CAN_RX0);
         NVIC::unmask(Interrupt::TIM2);
@@ -192,13 +228,20 @@ fn main() -> ! {
 }
 
 #[interrupt]
-fn USB_HP_CAN_TX() {
-    usb_interrupt();
-}
+unsafe fn USART1() {
+    let serial = SERIAL.as_mut().unwrap();
+    let result = serial.read();
+    if let Ok(byte) = result {
+        UARTCONTROLLER.as_mut().unwrap().read_byte(byte);
+    }
 
-#[interrupt]
-fn USB_LP_CAN_RX0() {
-    usb_interrupt();
+    let command = UARTCONTROLLER.as_mut().unwrap().get_command();
+
+    if let Some(c) = command {
+        let response = parse_command(&c);
+    }
+
+    serial.listen(stm32f1xx_hal::serial::Event::Rxne);
 }
 
 #[interrupt]
@@ -221,6 +264,16 @@ unsafe fn TIM3() {
     ANIM_TIMER.as_mut().unwrap().clear_update_interrupt_flag();
 }
 
+#[interrupt]
+fn USB_HP_CAN_TX() {
+    usb_interrupt();
+}
+
+#[interrupt]
+fn USB_LP_CAN_RX0() {
+    usb_interrupt();
+}
+
 fn usb_interrupt() {
     let usb_dev = unsafe { USB_DEVICE.as_mut().unwrap() };
     let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
@@ -229,35 +282,38 @@ fn usb_interrupt() {
         return;
     }
 
-    let mut buf = [0_u8; 256];
+    let mut buf = [0_u8; 512];
 
     match serial.read(&mut buf) {
         Ok(count) if count > 0 => {
-            let command = interpret_command::<256, 64>(&buf);
-            match command {
-                Ok(command) => unsafe {
-                    let result = command.execute(
-                        &mut DISPLAY_MODE,
-                        DISPLAY.as_mut().unwrap(),
-                        &mut OUTPUT_ENABLED,
-                    );
-
-                    match result {
-                        Ok(_) => {
-                            serial.write("OK".as_bytes()).ok();
-                        }
-                        Err(e) => {
-                            serial.write(e.message().as_bytes()).ok();
-                        }
-                    };
-                },
-                Err(e) => {
-                    serial.write(e.message().as_bytes()).ok();
-                }
-            }
-
-            serial.write(&buf).ok();
+            let response = parse_command(&buf[4..]);
+            serial.write(response).ok();
         }
         _ => {}
+    }
+}
+
+fn parse_command(buffer: &[u8]) -> &[u8] {
+    let command = interpret_command::<256, 64>(&buffer);
+    match command {
+        Ok(command) => unsafe {
+            let result = command.execute(
+                &mut DISPLAY_MODE,
+                DISPLAY.as_mut().unwrap(),
+                &mut OUTPUT_ENABLED,
+            );
+
+            match result {
+                Ok(_) => {
+                    return "OK".as_bytes();
+                }
+                Err(e) => {
+                    return e.message().as_bytes();
+                }
+            };
+        },
+        Err(e) => {
+            return e.message().as_bytes();
+        }
     }
 }
