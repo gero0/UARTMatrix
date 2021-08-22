@@ -70,8 +70,8 @@ impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LEN
                     Command::SetFont(set_font) => set_font.execute(text_display)?,
                     Command::SetColor(set_color) => set_color.execute(text_display)?,
                     Command::SetAnimation(set_animation) => set_animation.execute(text_display)?,
-                    Command::Ping => return Ok("Pong"),
-                    Command::ParamRequest => return Ok("Mode:Text"),
+                    Command::Ping => return Ok("Pong\n"),
+                    Command::ParamRequest => return Ok("Mode:Text\n"),
                     Command::DisableOutput => {
                         *oe = false;
                     }
@@ -92,11 +92,11 @@ impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LEN
                 Command::DrawCircle(draw_circle) => draw_circle.execute(target)?,
                 Command::Clear => {
                     target.clear(Rgb888::new(0, 0, 0)).ok();
-                    return Ok("cleared");
+                    return Ok("Cleared\n");
                 }
-                Command::Ping => return Ok("Pong"),
+                Command::Ping => return Ok("Pong\n"),
                 Command::ParamRequest => {
-                    return Ok("Mode:Direct");
+                    return Ok("Mode:Direct\n");
                 }
                 Command::DisableOutput => {
                     *oe = false;
@@ -110,7 +110,7 @@ impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LEN
                 _ => return Err(DisplayError::IncorrectMode),
             },
         }
-        Ok("OK")
+        Ok("OK\n")
     }
 }
 

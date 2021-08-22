@@ -1,7 +1,8 @@
 import serial
 import itertools
+import time
 
-ser = serial.Serial('/dev/ttyUSB0', 9600)  # open serial port
+ser = serial.Serial('/dev/ttyUSB0', 115200)  # open serial port
 
 def send(byte_array):
     l = len(byte_array)
@@ -57,9 +58,12 @@ while True:
         send([9])
     elif cmd == "od":
         send([10])
+    elif cmd == "ping":
+        send([15])
     else:
         ser.close()
         break
 
     s = ser.read_all()   # write a string
+
     print(s)

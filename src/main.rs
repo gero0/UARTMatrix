@@ -8,25 +8,25 @@ mod uart;
 
 use crate::{
     command_interpreter::interpret_command,
-    uart::UartController,
     display::{
         font::Font,
         text_animations::{BlinkingAnimation, SlideAnimation, SlideDirection, TextAnimation},
         text_display::TextDisplay,
         DisplayMode,
     },
+    uart::UartController,
 };
 
 use cortex_m::{asm::delay, peripheral::NVIC};
 use cortex_m_rt::entry;
 
 use embedded_hal::digital::v2::OutputPin;
+use nb::block;
 use stm32f1xx_hal::{
     delay::Delay,
-    gpio::{gpioa::PA10, gpioa::PA9, Alternate, Floating, Input, PushPull},
     pac::{interrupt, Interrupt, Peripherals, TIM2, TIM3, USART1},
     prelude::*,
-    serial::{Config, Serial},
+    serial::{Config, Rx, Serial, Tx},
     timer::{CountDownTimer, Event, Timer},
     usb::{Peripheral, UsbBus, UsbBusType},
 };
@@ -57,7 +57,9 @@ const PIN_POS: Pins = Pins {
     oe: 14,
 };
 
-static mut SERIAL: Option<Serial<USART1, (PA9<Alternate<PushPull>>, PA10<Input<Floating>>)>> = None;
+static mut SERIAL_TX: Option<Tx<USART1>> = None;
+static mut SERIAL_RX: Option<Rx<USART1>> = None;
+
 static mut UARTCONTROLLER: Option<UartController<512>> = None;
 
 static mut DISPLAY: Option<Hub75<PIN_POS, DOUBLE_SCREEN_WIDTH>> = None;
@@ -112,20 +114,23 @@ fn main() -> ! {
     let tx = gpioa.pa9.into_alternate_push_pull(&mut gpioa.crh);
     let rx = gpioa.pa10;
 
-    let mut serial = Serial::usart1(
+    let serial = Serial::usart1(
         dp.USART1,
         (tx, rx),
         &mut afio.mapr,
-        Config::default().baudrate(9600.bps()),
+        Config::default().baudrate(115200.bps()),
         clocks,
         &mut rcc.apb2,
     );
 
-    serial.listen(stm32f1xx_hal::serial::Event::Rxne);
+    let (tx, mut rx) = serial.split();
+
+    rx.listen();
 
     unsafe {
         UARTCONTROLLER = Some(UartController::new());
-        SERIAL = Some(serial);
+        SERIAL_TX = Some(tx);
+        SERIAL_RX = Some(rx);
     }
 
     // BluePill board has a pull-up resistor on the D+ line.
@@ -229,8 +234,9 @@ fn main() -> ! {
 
 #[interrupt]
 unsafe fn USART1() {
-    let serial = SERIAL.as_mut().unwrap();
-    let result = serial.read();
+    let rx = SERIAL_RX.as_mut().unwrap();
+
+    let result = rx.read();
     if let Ok(byte) = result {
         UARTCONTROLLER.as_mut().unwrap().read_byte(byte);
     }
@@ -239,9 +245,10 @@ unsafe fn USART1() {
 
     if let Some(c) = command {
         let response = parse_command(&c);
+        uart_transmit_block(response);
     }
 
-    serial.listen(stm32f1xx_hal::serial::Event::Rxne);
+    rx.listen();
 }
 
 #[interrupt]
@@ -304,8 +311,8 @@ fn parse_command(buffer: &[u8]) -> &[u8] {
             );
 
             match result {
-                Ok(_) => {
-                    return "OK".as_bytes();
+                Ok(response) => {
+                    return response.as_bytes();
                 }
                 Err(e) => {
                     return e.message().as_bytes();
@@ -316,4 +323,12 @@ fn parse_command(buffer: &[u8]) -> &[u8] {
             return e.message().as_bytes();
         }
     }
+}
+
+fn uart_transmit_block(message: &[u8]){
+    let tx = unsafe{ SERIAL_TX.as_mut().unwrap() };
+    for character in message{
+        block!(tx.write(character.clone())).ok();
+    }
+    tx.flush().ok();
 }

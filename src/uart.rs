@@ -1,5 +1,3 @@
-use cortex_m_semihosting::hprintln;
-
 const HEADER: [u8; 3] = [85, 77, 88];
 
 pub enum UartState {
