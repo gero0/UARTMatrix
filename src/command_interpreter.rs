@@ -107,8 +107,9 @@ impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LEN
                 Command::SwitchMode(switch_mode) => {
                     switch_mode.execute(mode, target)?;
                 }
+                
                 _ => return Err(DisplayError::IncorrectMode),
-            },
+            }
         }
         Ok("OK\n")
     }

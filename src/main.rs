@@ -159,10 +159,11 @@ fn main() -> ! {
             .product("Serial port")
             .serial_number("TEST")
             .device_class(USB_CLASS_CDC)
+            .max_packet_size_0(64)
             .build();
 
         USB_DEVICE = Some(usb_dev);
-        DISPLAY = Some(Hub75::new(4, &mut *(0x40010C0C as *mut u16)));
+        DISPLAY = Some(Hub75::new(6, &mut *(0x40010C0C as *mut u16)));
 
         p.NVIC.set_priority(Interrupt::USART1, 16);
         p.NVIC.set_priority(Interrupt::TIM2, 32);
@@ -203,6 +204,7 @@ fn main() -> ! {
                     TextAnimation::SlideAnimation(SlideAnimation::new(4, SlideDirection::Left)),
                 )
                 .ok();
+
                 tm.set_color(0, (128, 128, 128)).ok();
                 tm.set_color(1, (255, 0, 0)).ok();
                 tm.set_color(2, (240, 120, 0)).ok();
@@ -273,30 +275,35 @@ unsafe fn TIM3() {
 
 #[interrupt]
 fn USB_HP_CAN_TX() {
-    usb_interrupt();
+    unsafe { usb_interrupt() };
 }
 
 #[interrupt]
 fn USB_LP_CAN_RX0() {
-    usb_interrupt();
+    unsafe { usb_interrupt() };
 }
 
-fn usb_interrupt() {
-    let usb_dev = unsafe { USB_DEVICE.as_mut().unwrap() };
-    let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
+unsafe fn usb_interrupt() {
+    let usb_dev = USB_DEVICE.as_mut().unwrap();
+    let serial = USB_SERIAL.as_mut().unwrap();
 
     if !usb_dev.poll(&mut [serial]) {
         return;
     }
 
-    let mut buf = [0_u8; 512];
+    let mut buf = [0_u8; 1024];
 
-    match serial.read(&mut buf) {
-        Ok(count) if count > 0 => {
-            let response = parse_command(&buf[4..]);
+    if let Ok(count) = serial.read(&mut buf) {
+        for i in 0..count {
+            UARTCONTROLLER.as_mut().unwrap().read_byte(buf[i]);
+        }
+
+        let command = UARTCONTROLLER.as_mut().unwrap().get_command();
+
+        if let Some(c) = command {
+            let response = parse_command(&c);
             serial.write(response).ok();
         }
-        _ => {}
     }
 }
 
