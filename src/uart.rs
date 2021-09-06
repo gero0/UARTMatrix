@@ -14,7 +14,7 @@ pub struct UartController<const RX_BUFFER_SIZE: usize> {
 }
 
 impl<const RX_BUFFER_SIZE: usize> UartController<RX_BUFFER_SIZE> {
-    const HEADER_LEN: usize = 4;
+    const HEADER_LEN: usize = 5;
 
     pub fn new() -> Self {
         UartController {
@@ -37,14 +37,14 @@ impl<const RX_BUFFER_SIZE: usize> UartController<RX_BUFFER_SIZE> {
 
                 self.rx_offset += 1;
 
-                //We got 4 bytes that should be the command header UMX
+                //We got 5 bytes that should be the command header UMX
                 if self.rx_offset >= Self::HEADER_LEN {
                     //Check the magic numbers to make sure we're receiving valid packet
                     if self.rx_buf[0..3] == [85, 77, 88] {
                         //Update bytes_to_read with packet length
-                        let bytes_to_read = (self.rx_buf[3]) as usize;
+                        let bytes_to_read = ( (self.rx_buf[3] as u16) << 8) | self.rx_buf[4] as u16;
                         self.reset();
-                        self.bytes_to_read = bytes_to_read;
+                        self.bytes_to_read = bytes_to_read as usize;
                         self.state = UartState::ReceivingCommand;
                     } else {
                         self.reset();
