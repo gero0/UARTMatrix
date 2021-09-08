@@ -23,7 +23,21 @@ use super::{
 const ROWS: usize = 3;
 const OFFSET: i32 = 8;
 const LETTER_WIDTH: usize = 9;
+const ROW_PX_WIDTH: usize = 64;
 
+pub fn utf8_slice(s: &str, start: usize, end: usize) -> Option<&str> {
+    let mut iter = s
+        .char_indices()
+        .map(|(pos, _)| pos)
+        .chain(Some(s.len()))
+        .skip(start)
+        .peekable();
+    let start_pos = *iter.peek()?;
+    for _ in start..end {
+        iter.next();
+    }
+    Some(&s[start_pos..*iter.peek()?])
+}
 #[derive(Debug)]
 pub struct TextDisplay<'a, const TEXT_ROW_LENGTH: usize> {
     rows: [String<TEXT_ROW_LENGTH>; ROWS],
@@ -117,17 +131,111 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
             let anim_state = self.animation[i].get();
 
             if anim_state.visible {
-                Text::new(
-                    self.rows[i].as_str(),
-                    Point::new(
-                        0 + anim_state.x_offset,
-                        OFFSET + (i as i32 * 9) + anim_state.y_offset,
-                    ),
-                    self.style[i].clone(),
-                )
-                .draw(target)
-                .ok();
-            }else{
+                match self.animation[i] {
+                    TextAnimation::SlideAnimation(_anim) => {
+                        let mut string = String::<512>::from(" ");
+
+                        let anim_offset = anim_state.x_offset;
+                        let glyph_width = self.style[i].font.character_size.width;
+
+                        if anim_offset > 0 {
+                            let pixels_still_on_screen = ROW_PX_WIDTH as i32 - anim_offset;
+                            if pixels_still_on_screen > 0 {
+                                let mut characters_still_on_screen =
+                                    (pixels_still_on_screen as usize / glyph_width as usize) + 1;
+
+                                let char_length = self.rows[i].chars().count();
+
+                                if characters_still_on_screen >= char_length {
+                                    characters_still_on_screen = char_length - 1;
+                                }
+
+                                string
+                                    .push_str(
+                                        utf8_slice(
+                                            &self.rows[i],
+                                            0,
+                                            characters_still_on_screen + 1,
+                                        )
+                                        .unwrap(),
+                                    )
+                                    .ok();
+                            }
+
+                            string.push_str(" ").ok();
+
+                            Text::new(
+                                string.as_str(),
+                                Point::new(
+                                    anim_offset,
+                                    OFFSET + (i as i32 * 9) + anim_state.y_offset,
+                                ),
+                                self.style[i].clone(),
+                            )
+                            .draw(target)
+                            .ok();
+                        } else {
+                            let characters_skipped =
+                                anim_offset.abs() as usize / glyph_width as usize;
+
+                            let x_offset = anim_offset % glyph_width as i32;
+
+                            if characters_skipped < self.rows[i].len() {
+                                let characters_that_will_fit =
+                                    (ROW_PX_WIDTH / glyph_width as usize) + 1;
+
+                                let mut last_index = characters_skipped + characters_that_will_fit;
+
+                                let char_length = self.rows[i].chars().count();
+
+                                if last_index >= char_length {
+                                    last_index = char_length - 1;
+                                }
+
+                                if last_index >= characters_skipped {
+                                    string
+                                        .push_str(
+                                            utf8_slice(
+                                                &self.rows[i],
+                                                characters_skipped,
+                                                last_index + 1,
+                                            )
+                                            .unwrap_or_else(|| {
+                                                panic!(
+                                                    "b: {}, e:{}",
+                                                    characters_skipped, last_index
+                                                )
+                                            }),
+                                        )
+                                        .ok();
+                                }
+                            }
+
+                            string.push_str(" ").ok();
+
+                            Text::new(
+                                string.as_str(),
+                                Point::new(x_offset, OFFSET + (i as i32 * 9) + anim_state.y_offset),
+                                self.style[i].clone(),
+                            )
+                            .draw(target)
+                            .ok();
+                        }
+                    }
+                    _ => {
+                        Text::new(
+                            self.rows[i].as_str(),
+                            Point::new(
+                                0 + anim_state.x_offset,
+                                OFFSET + (i as i32 * 9) + anim_state.y_offset,
+                            ),
+                            self.style[i].clone(),
+                        )
+                        .draw(target)
+                        .ok();
+                    }
+                }
+            } else {
                 //Because clearing the display would take too much time ;)
                 Text::new(
                     "                                  ",
