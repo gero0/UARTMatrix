@@ -14,11 +14,7 @@ use embedded_graphics::mono_font::ascii::FONT_6X9;
 use ibm437::IBM437_8X8_NORMAL;
 use profont::PROFONT_7_POINT;
 
-use super::{
-    font::Font,
-    text_animations::TextAnimation,
-    DisplayError,
-};
+use super::{font::Font, text_animations::TextAnimation, DisplayError};
 
 const ROWS: usize = 3;
 const OFFSET: i32 = 8;
@@ -223,12 +219,18 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
                         }
                     }
                     _ => {
+                        let glyph_width = self.style[i].font.character_size.width;
+                        let mut last_index = (ROW_PX_WIDTH / glyph_width as usize) + 1;
+
+                        let char_length = self.rows[i].chars().count();
+
+                        if last_index >= char_length {
+                            last_index = char_length - 1;
+                        }
+
                         Text::new(
-                            self.rows[i].as_str(),
-                            Point::new(
-                                0 + anim_state.x_offset,
-                                OFFSET + (i as i32 * 9) + anim_state.y_offset,
-                            ),
+                            utf8_slice(&self.rows[i], 0, last_index + 1).unwrap(),
+                            Point::new(0, OFFSET + (i as i32 * 9)),
                             self.style[i].clone(),
                         )
                         .draw(target)
