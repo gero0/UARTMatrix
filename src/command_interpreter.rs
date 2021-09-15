@@ -153,7 +153,7 @@ pub struct Write<const TEXT_ROW_LENGTH: usize> {
 impl<const TEXT_ROW_LENGTH: usize> Write<TEXT_ROW_LENGTH> {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
         let row = buffer[1] as usize;
-        let terminator = buffer[2..].iter().position(|e| e.clone() == 0).unwrap() + 2;
+        let terminator = buffer[2..].iter().position(|e| *e == 0).unwrap() + 2;
 
         let string = core::str::from_utf8(&buffer[2..terminator])
             .map_err(|_| DisplayError::InvalidSetting)?;
@@ -188,7 +188,7 @@ impl SetFont {
             }
         };
 
-        Ok(SetFont { row, font })
+        Ok(SetFont { font, row })
     }
 
     pub fn execute<const TEXT_ROW_LENGTH: usize>(
@@ -250,7 +250,7 @@ impl SetAnimation {
             _ => return Err(DisplayError::InvalidSetting),
         };
 
-        Ok(SetAnimation { row, animation })
+        Ok(SetAnimation { animation, row })
     }
 
     pub fn execute<const TEXT_ROW_LENGTH: usize>(
@@ -301,13 +301,13 @@ impl<const ROW_LENGTH: usize> DrawRow<ROW_LENGTH> {
         let row = buffer[1] as usize;
         let mut rgb_color = [(0, 0, 0); ROW_LENGTH];
 
-        for i in 0..ROW_LENGTH {
+        (0..ROW_LENGTH).for_each(|i| {
             let offset = 2 + (i * 3);
             let color = (buffer[offset], buffer[offset + 1], buffer[offset + 2]);
             rgb_color[i] = color;
-        }
+        });
 
-        Ok(Self { row, rgb_color })
+        Ok(Self { rgb_color, row })
     }
 
     pub fn execute<T: DrawTarget<Color = Rgb888>>(
@@ -377,10 +377,7 @@ pub struct DrawRectangle {
 
 impl DrawRectangle {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
-        let filled = match buffer[9] {
-            0 => false,
-            _ => true,
-        };
+        let filled = !matches!(buffer[9], 0);
 
         Ok(DrawRectangle {
             point_a: (buffer[1], buffer[2]),
@@ -431,10 +428,7 @@ pub struct DrawTriangle {
 
 impl DrawTriangle {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
-        let filled = match buffer[11] {
-            0 => false,
-            _ => true,
-        };
+        let filled = !matches!(buffer[11], 0);
 
         Ok(DrawTriangle {
             point_a: (buffer[1], buffer[2]),
@@ -487,10 +481,7 @@ pub struct DrawCircle {
 
 impl DrawCircle {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
-        let filled = match buffer[7] {
-            0 => false,
-            _ => true,
-        };
+        let filled = !matches!(buffer[7], 0);
 
         Ok(DrawCircle {
             center: (buffer[1], buffer[2]),

@@ -183,35 +183,32 @@ fn main() -> ! {
     unsafe {
         DISPLAY_MODE = DisplayMode::TextMode(TextDisplay::<256>::new());
 
-        match &mut DISPLAY_MODE {
-            DisplayMode::TextMode(tm) => {
-                tm.write(0, String::from("Rust is cool")).ok();
-                tm.write(1, String::from("AAAAAAAAAAA")).ok();
-                tm.write(2, String::from("Man i love crabs (\\/) (°,,°) (\\/)"))
-                    .ok();
-                tm.set_animation(
-                    0,
-                    TextAnimation::SlideAnimation(SlideAnimation::new(4, SlideDirection::Left)),
-                )
+        if let DisplayMode::TextMode(tm) = &mut DISPLAY_MODE {
+            tm.write(0, String::from("Rust is cool")).ok();
+            tm.write(1, String::from("AAAAAAAAAAA")).ok();
+            tm.write(2, String::from("Man i love crabs (\\/) (°,,°) (\\/)"))
                 .ok();
-                tm.set_animation(
-                    1,
-                    TextAnimation::BlinkingAnimation(BlinkingAnimation::new(64)),
-                )
-                .ok();
-                tm.set_animation(
-                    2,
-                    TextAnimation::SlideAnimation(SlideAnimation::new(4, SlideDirection::Left)),
-                )
-                .ok();
+            tm.set_animation(
+                0,
+                TextAnimation::SlideAnimation(SlideAnimation::new(4, SlideDirection::Left)),
+            )
+            .ok();
+            tm.set_animation(
+                1,
+                TextAnimation::BlinkingAnimation(BlinkingAnimation::new(64)),
+            )
+            .ok();
+            tm.set_animation(
+                2,
+                TextAnimation::SlideAnimation(SlideAnimation::new(4, SlideDirection::Left)),
+            )
+            .ok();
 
-                tm.set_color(0, (128, 128, 128)).ok();
-                tm.set_color(1, (255, 0, 0)).ok();
-                tm.set_color(2, (240, 120, 0)).ok();
-                tm.set_font(1, Font::Ibm).ok();
-                tm.set_font(2, Font::ProFont).ok();
-            }
-            _ => {}
+            tm.set_color(0, (128, 128, 128)).ok();
+            tm.set_color(1, (255, 0, 0)).ok();
+            tm.set_color(2, (240, 120, 0)).ok();
+            tm.set_font(1, Font::Ibm).ok();
+            tm.set_font(2, Font::ProFont).ok();
         }
     }
     let mut draw_timer = Timer::tim2(dp.TIM2, &clocks, &mut rcc.apb1).start_count_down(100.hz());
@@ -226,9 +223,8 @@ fn main() -> ! {
     }
     loop {
         unsafe {
-            match &mut DISPLAY_MODE {
-                DisplayMode::TextMode(tm) => tm.update(DISPLAY.as_mut().unwrap()),
-                _ => {}
+            if let DisplayMode::TextMode(tm) = &mut DISPLAY_MODE {
+                tm.update(DISPLAY.as_mut().unwrap())
             };
         }
     }
@@ -266,9 +262,8 @@ unsafe fn TIM2() {
 
 #[interrupt]
 unsafe fn TIM3() {
-    match &mut DISPLAY_MODE {
-        DisplayMode::TextMode(tm) => tm.anim_tick(),
-        _ => {}
+    if let DisplayMode::TextMode(tm) = &mut DISPLAY_MODE {
+        tm.anim_tick()
     };
     ANIM_TIMER.as_mut().unwrap().clear_update_interrupt_flag();
 }
@@ -294,9 +289,9 @@ unsafe fn usb_interrupt() {
     let mut buf = [0_u8; 1024];
 
     if let Ok(count) = serial.read(&mut buf) {
-        for i in 0..count {
+        (0..count).for_each(|i| {
             UARTCONTROLLER.as_mut().unwrap().read_byte(buf[i]);
-        }
+        });
 
         let command = UARTCONTROLLER.as_mut().unwrap().get_command();
 
@@ -318,13 +313,9 @@ fn parse_command(buffer: &[u8]) -> &[u8] {
             );
 
             match result {
-                Ok(response) => {
-                    return response.as_bytes();
-                }
-                Err(e) => {
-                    return e.message().as_bytes();
-                }
-            };
+                Ok(response) => response.as_bytes(),
+                Err(e) => e.message().as_bytes(),
+            }
         },
         Err(e) => {
             return e.message().as_bytes();
@@ -332,10 +323,10 @@ fn parse_command(buffer: &[u8]) -> &[u8] {
     }
 }
 
-fn uart_transmit_block(message: &[u8]){
-    let tx = unsafe{ SERIAL_TX.as_mut().unwrap() };
-    for character in message{
-        block!(tx.write(character.clone())).ok();
+fn uart_transmit_block(message: &[u8]) {
+    let tx = unsafe { SERIAL_TX.as_mut().unwrap() };
+    for character in message {
+        block!(tx.write(*character)).ok();
     }
     tx.flush().ok();
 }

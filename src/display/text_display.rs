@@ -166,7 +166,7 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
                                     anim_offset,
                                     OFFSET + (i as i32 * 9) + anim_state.y_offset,
                                 ),
-                                self.style[i].clone(),
+                                self.style[i],
                             )
                             .draw(target)
                             .ok();
@@ -212,7 +212,7 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
                             Text::new(
                                 string.as_str(),
                                 Point::new(x_offset, OFFSET + (i as i32 * 9) + anim_state.y_offset),
-                                self.style[i].clone(),
+                                self.style[i],
                             )
                             .draw(target)
                             .ok();
@@ -231,7 +231,7 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
                         Text::new(
                             utf8_slice(&self.rows[i], 0, last_index + 1).unwrap(),
                             Point::new(0, OFFSET + (i as i32 * 9)),
-                            self.style[i].clone(),
+                            self.style[i],
                         )
                         .draw(target)
                         .ok();
@@ -242,10 +242,10 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
                 Text::new(
                     "                                  ",
                     Point::new(
-                        0 + anim_state.x_offset,
+                        anim_state.x_offset,
                         OFFSET + (i as i32 * 9) + anim_state.y_offset,
                     ),
-                    self.style[i].clone(),
+                    self.style[i],
                 )
                 .draw(target)
                 .ok();
