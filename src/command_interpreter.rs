@@ -377,7 +377,7 @@ pub struct DrawRectangle {
 
 impl DrawRectangle {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
-        let filled = !matches!(buffer[9], 0);
+        let filled = matches!(buffer[9], 1);
 
         Ok(DrawRectangle {
             point_a: (buffer[1], buffer[2]),
@@ -395,12 +395,12 @@ impl DrawRectangle {
         let (x1, y1) = self.point_a;
         let (x2, y2) = self.point_b;
 
-        let style = PrimitiveStyleBuilder::new()
+        let mut style = PrimitiveStyleBuilder::new()
             .stroke_color(self.color)
             .stroke_width(self.thickness as u32);
 
         if self.filled {
-            style.fill_color(self.color);
+            style = style.fill_color(self.color);
         }
 
         let style = style.build();
@@ -428,7 +428,7 @@ pub struct DrawTriangle {
 
 impl DrawTriangle {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
-        let filled = !matches!(buffer[11], 0);
+        let filled = matches!(buffer[11], 1);
 
         Ok(DrawTriangle {
             point_a: (buffer[1], buffer[2]),
@@ -448,12 +448,12 @@ impl DrawTriangle {
         let (x2, y2) = self.point_b;
         let (x3, y3) = self.point_c;
 
-        let style = PrimitiveStyleBuilder::new()
+        let mut style = PrimitiveStyleBuilder::new()
             .stroke_color(self.color)
             .stroke_width(self.thickness as u32);
 
         if self.filled {
-            style.fill_color(self.color);
+            style = style.fill_color(self.color);
         }
 
         let style = style.build();
@@ -481,7 +481,7 @@ pub struct DrawCircle {
 
 impl DrawCircle {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
-        let filled = !matches!(buffer[7], 0);
+        let filled = matches!(buffer[8], 1);
 
         Ok(DrawCircle {
             center: (buffer[1], buffer[2]),
@@ -498,12 +498,12 @@ impl DrawCircle {
     ) -> Result<(), DisplayError> {
         let (x1, y1) = self.center;
 
-        let style = PrimitiveStyleBuilder::new()
+        let mut style = PrimitiveStyleBuilder::new()
             .stroke_color(self.color)
             .stroke_width(self.thickness as u32);
 
         if self.filled {
-            style.fill_color(self.color);
+            style = style.fill_color(self.color);
         }
 
         let style = style.build();
