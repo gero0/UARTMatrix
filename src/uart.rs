@@ -1,3 +1,5 @@
+use crate::crc;
+
 const HEADER: [u8; 3] = [85, 77, 88];
 
 pub enum UartState {
@@ -44,7 +46,8 @@ impl<const RX_BUFFER_SIZE: usize> UartController<RX_BUFFER_SIZE> {
                         //Update bytes_to_read with packet length
                         let bytes_to_read = ( (self.rx_buf[3] as u16) << 8) | self.rx_buf[4] as u16;
                         self.reset();
-                        self.bytes_to_read = bytes_to_read as usize;
+                        //+ 1 because of CRC byte
+                        self.bytes_to_read = bytes_to_read as usize + 1;
                         self.state = UartState::ReceivingCommand;
                     } else {
                         self.reset();
@@ -74,9 +77,17 @@ impl<const RX_BUFFER_SIZE: usize> UartController<RX_BUFFER_SIZE> {
 
     pub fn get_command(&mut self) -> Option<[u8; RX_BUFFER_SIZE]> {
         if let UartState::CommandReceived = self.state {
-            let copy = self.rx_buf.clone();
+            let crc_check = crc::crc8_ccitt(&self.rx_buf[0..self.bytes_to_read]);
+            
+            if crc_check == 0 {
+                self.rx_buf[self.bytes_to_read-1] = 0;
+                let copy = self.rx_buf.clone();
+                self.reset();
+                return Some(copy)
+            }
+
             self.reset();
-            return Some(copy);
+            return None;
         }
 
         return None;

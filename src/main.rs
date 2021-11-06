@@ -5,6 +5,7 @@
 mod command_interpreter;
 mod display;
 mod uart;
+mod crc;
 
 use crate::{
     command_interpreter::interpret_command,
@@ -163,7 +164,7 @@ fn main() -> ! {
             .build();
 
         USB_DEVICE = Some(usb_dev);
-        DISPLAY = Some(Hub75::new(6, &mut *(0x40010C0C as *mut u16)));
+        DISPLAY = Some(Hub75::new(8, &mut *(0x40010C0C as *mut u16)));
 
         p.NVIC.set_priority(Interrupt::USART1, 16);
         p.NVIC.set_priority(Interrupt::TIM2, 32);
