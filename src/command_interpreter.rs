@@ -2,6 +2,7 @@ use crate::{
     display::{font::Font, text_animations::TextAnimation, DisplayError, TextDisplay},
     BlinkingAnimation, DisplayMode, SlideAnimation, SlideDirection,
 };
+
 use embedded_graphics::{
     draw_target::DrawTarget,
     pixelcolor::Rgb888,
@@ -273,6 +274,10 @@ impl DrawPixel {
         let coords = (buffer[1] as usize, buffer[2] as usize);
         let rgb_color = (buffer[3], buffer[4], buffer[5]);
 
+        if coords.0 > 63 || coords.1 > 31{
+            return Err(DisplayError::OutOfBounds);
+        }
+
         Ok(DrawPixel { rgb_color, coords })
     }
 
@@ -299,6 +304,11 @@ pub struct DrawRow<const ROW_LENGTH: usize> {
 impl<const ROW_LENGTH: usize> DrawRow<ROW_LENGTH> {
     pub fn new(buffer: &[u8]) -> Result<Self, DisplayError> {
         let row = buffer[1] as usize;
+
+        if row > 31 {
+            return Err(DisplayError::OutOfBounds);
+        }
+
         let mut rgb_color = [(0, 0, 0); ROW_LENGTH];
 
         (0..ROW_LENGTH).for_each(|i| {
