@@ -156,15 +156,19 @@ fn main() -> ! {
         USB_BUS = Some(bus);
         USB_SERIAL = Some(SerialPort::new(USB_BUS.as_ref().unwrap()));
         let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x16c0, 0x27dd))
-            .manufacturer("Fake company")
-            .product("Serial port")
-            .serial_number("TEST")
+            .manufacturer("Prototype")
+            .product("UART MATRIX")
+            .serial_number("PROTOTYPE")
             .device_class(USB_CLASS_CDC)
             .max_packet_size_0(64)
             .build();
 
         USB_DEVICE = Some(usb_dev);
+
+        //0x40010C0C is address of GPIOB output register
         DISPLAY = Some(Hub75::new(8, &mut *(0x40010C0C as *mut u16)));
+
+        //Setting priorities and enabling interrupts
 
         p.NVIC.set_priority(Interrupt::USART1, 16);
         p.NVIC.set_priority(Interrupt::TIM2, 32);
@@ -185,15 +189,11 @@ fn main() -> ! {
         DISPLAY_MODE = DisplayMode::TextMode(TextDisplay::<256>::new());
 
         if let DisplayMode::TextMode(tm) = &mut DISPLAY_MODE {
-            tm.write(0, String::from("Rust is cool")).ok();
-            tm.write(1, String::from("AAAAAAAAAAA")).ok();
-            tm.write(2, String::from("Man i love crabs (\\/) (°,,°) (\\/)"))
+            tm.write(0, String::from("TEST")).ok();
+            tm.write(1, String::from("TEST")).ok();
+            tm.write(2, String::from("TEST"))
                 .ok();
-            tm.set_animation(
-                0,
-                TextAnimation::SlideAnimation(SlideAnimation::new(4, SlideDirection::Left)),
-            )
-            .ok();
+
             tm.set_animation(
                 1,
                 TextAnimation::BlinkingAnimation(BlinkingAnimation::new(64)),
