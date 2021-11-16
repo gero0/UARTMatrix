@@ -3,9 +3,9 @@
 #![feature(const_generics)]
 
 mod command_interpreter;
+mod crc;
 mod display;
 mod uart;
-mod crc;
 
 use crate::{
     command_interpreter::interpret_command,
@@ -27,6 +27,7 @@ use stm32f1xx_hal::{
     delay::Delay,
     pac::{interrupt, Interrupt, Peripherals, TIM2, TIM3, USART1},
     prelude::*,
+    rcc::{Enable, Reset},
     serial::{Config, Rx, Serial, Tx},
     timer::{CountDownTimer, Event, Timer},
     usb::{Peripheral, UsbBus, UsbBusType},
@@ -40,6 +41,10 @@ use usbd_serial::{SerialPort, USB_CLASS_CDC};
 use hub75::{Hub75, Pins};
 
 extern crate panic_semihosting;
+
+const BCM_DELAYS: [u16; 8] = [16, 32, 64, 128, 256, 512, 1024, 2048];
+const BCM_START:usize = 0;
+static mut BCM_INDEX: usize = BCM_START;
 
 const DOUBLE_SCREEN_WIDTH: usize = 128;
 
@@ -66,7 +71,7 @@ static mut UARTCONTROLLER: Option<UartController<512>> = None;
 static mut DISPLAY: Option<Hub75<PIN_POS, DOUBLE_SCREEN_WIDTH>> = None;
 static mut DISPLAY_MODE: DisplayMode<256> = DisplayMode::DirectMode;
 static mut DELAY: Option<Delay> = None;
-static mut DRAW_TIMER: Option<CountDownTimer<TIM2>> = None;
+static mut DRAW_TIMER: Option<TIM2> = None;
 static mut ANIM_TIMER: Option<CountDownTimer<TIM3>> = None;
 static mut OUTPUT_ENABLED: bool = true;
 
@@ -77,7 +82,7 @@ static mut USB_DEVICE: Option<UsbDevice<UsbBusType>> = None;
 #[entry]
 fn main() -> ! {
     let mut p = cortex_m::Peripherals::take().unwrap();
-    let dp = Peripherals::take().unwrap();
+    let mut dp = Peripherals::take().unwrap();
 
     let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
@@ -88,6 +93,7 @@ fn main() -> ! {
         .cfgr
         .use_hse(8.mhz())
         .sysclk(72.mhz())
+        .hclk(72.mhz())
         .pclk1(24.mhz())
         .freeze(&mut flash.acr);
 
@@ -191,8 +197,7 @@ fn main() -> ! {
         if let DisplayMode::TextMode(tm) = &mut DISPLAY_MODE {
             tm.write(0, String::from("TEST")).ok();
             tm.write(1, String::from("TEST")).ok();
-            tm.write(2, String::from("TEST"))
-                .ok();
+            tm.write(2, String::from("TEST")).ok();
 
             tm.set_animation(
                 1,
@@ -212,14 +217,38 @@ fn main() -> ! {
             tm.set_font(2, Font::ProFont).ok();
         }
     }
-    let mut draw_timer = Timer::tim2(dp.TIM2, &clocks, &mut rcc.apb1).start_count_down(100.hz());
+
     let mut anim_timer = Timer::tim3(dp.TIM3, &clocks, &mut rcc.apb1).start_count_down(60.hz());
 
-    draw_timer.listen(Event::Update);
+    //enable peripheral and reset to clean state
+    TIM2::enable(&mut rcc.apb1);
+    TIM2::reset(&mut rcc.apb1);
+
+    // //Enable one pulse mode
+    dp.TIM2.cr1.write(|w| w.opm().set_bit());
+    // //ensure direction UP
+    dp.TIM2.cr1.write(|w| w.dir().clear_bit());
+
+    // set prescaler to /48
+    dp.TIM2.psc.write(|w| w.psc().bits(47));
+
+    // //Enable listening for event
+    dp.TIM2.dier.write(|w| w.uie().set_bit());
+
+    //set value for autoreload register, should be 120Hz
+    dp.TIM2.arr.write(|w| w.arr().bits(8333));
+
+    // Trigger an update event to load the prescaler value to the clock
+
+    reset_timer(&mut dp.TIM2);
+
+    // start counter
+    dp.TIM2.cr1.modify(|_, w| w.cen().set_bit());
+
     anim_timer.listen(Event::Update);
 
     unsafe {
-        DRAW_TIMER = Some(draw_timer);
+        DRAW_TIMER = Some(dp.TIM2);
         ANIM_TIMER = Some(anim_timer);
     }
     loop {
@@ -252,13 +281,31 @@ unsafe fn USART1() {
 
 #[interrupt]
 unsafe fn TIM2() {
+
+    if BCM_INDEX > 7 {
+        BCM_INDEX = BCM_START;
+    }
+
     if OUTPUT_ENABLED {
         DISPLAY
             .as_mut()
             .unwrap()
-            .output_bcm(DELAY.as_mut().unwrap(), 1, 100);
+            .output_single_bcm(DELAY.as_mut().unwrap(), BCM_INDEX as u8, 100);
     }
-    DRAW_TIMER.as_mut().unwrap().clear_update_interrupt_flag();
+
+    let tim = DRAW_TIMER.as_mut().unwrap();
+
+    //set value for autoreload register, should be 120Hz
+    tim.arr.write(|w| w.arr().bits(BCM_DELAYS[BCM_INDEX]));
+    BCM_INDEX += 1;
+
+    //clear interrupt
+    tim.sr.modify(|_, w| w.uif().clear_bit());
+
+    reset_timer(tim);
+
+    // start counter
+    tim.cr1.modify(|_, w| w.cen().set_bit());
 }
 
 #[interrupt]
@@ -330,4 +377,14 @@ fn uart_transmit_block(message: &[u8]) {
         block!(tx.write(*character)).ok();
     }
     tx.flush().ok();
+}
+
+fn reset_timer(tim: &mut TIM2){
+    // Sets the URS bit to prevent an interrupt from being triggered by
+    // the UG bit
+    tim.cr1.modify(|_, w| w.urs().set_bit());
+
+    tim.egr.write(|w| w.ug().set_bit());
+
+    tim.cr1.modify(|_, w| w.urs().clear_bit());
 }
