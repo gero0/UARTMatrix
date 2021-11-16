@@ -36,5 +36,5 @@ lto = true      # Link-time-optimizations for further size reduction
 
 [profile.release]
 debug = 0
-opt-level = 's'
+opt-level = 3
 lto = true      # Link-time-optimizations for further size reduction
