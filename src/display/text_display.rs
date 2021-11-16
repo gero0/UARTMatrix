@@ -240,7 +240,7 @@ impl<'a, const TEXT_ROW_LENGTH: usize> TextDisplay<'a, TEXT_ROW_LENGTH> {
             } else {
                 //Because clearing the display would take too much time ;)
                 Text::new(
-                    "                                  ",
+                    "                ",
                     Point::new(
                         anim_state.x_offset,
                         OFFSET + (i as i32 * 9) + anim_state.y_offset,
