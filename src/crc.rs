@@ -36,6 +36,10 @@ const CRC_TABLE : [u8; 256] = [
 ];
 
 
+pub fn crc8_ccitt_single(byte: u8) -> u8 {
+    return CRC_TABLE[(0 ^ byte) as usize]
+}
+
 pub fn crc8_ccitt(data: &[u8]) -> u8{
 	let mut val = 0;
 
@@ -44,4 +48,13 @@ pub fn crc8_ccitt(data: &[u8]) -> u8{
 	}
 
 	return val;
+}
+
+pub fn crc8_ccitt_response(cc: u8, data: &[u8]) -> u8{
+    let mut val = crc8_ccitt_single(cc);
+    for byte in data {
+		val = CRC_TABLE[(val ^ byte) as usize];
+	}
+
+    return val;
 }

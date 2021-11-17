@@ -21,6 +21,7 @@ use crate::{
 use cortex_m::{asm::delay, peripheral::NVIC};
 use cortex_m_rt::entry;
 
+use crc::crc8_ccitt;
 use embedded_hal::digital::v2::OutputPin;
 use nb::block;
 use stm32f1xx_hal::{
@@ -43,7 +44,7 @@ use hub75::{Hub75, Pins};
 extern crate panic_semihosting;
 
 const BCM_DELAYS: [u16; 8] = [16, 32, 64, 128, 256, 512, 1024, 2048];
-const BCM_START:usize = 0;
+const BCM_START: usize = 0;
 static mut BCM_INDEX: usize = BCM_START;
 
 const DOUBLE_SCREEN_WIDTH: usize = 128;
@@ -273,7 +274,19 @@ unsafe fn USART1() {
 
     if let Some(c) = command {
         let response = parse_command(&c);
+        let crc = crc::crc8_ccitt_response(c[0], response);
+
+        uart_transmit_block("UMX".as_bytes());
+        let len = (response.len() + 1) as u16;
+
+        //send length
+        uart_transmit_block(&[(len >> 8) as u8]);
+        uart_transmit_block(&[len as u8]);
+        
+        //send command code
+        uart_transmit_block(&[c[0]]);
         uart_transmit_block(response);
+        uart_transmit_block(&[crc]);
     }
 
     rx.listen();
@@ -281,7 +294,6 @@ unsafe fn USART1() {
 
 #[interrupt]
 unsafe fn TIM2() {
-
     if BCM_INDEX > 7 {
         BCM_INDEX = BCM_START;
     }
@@ -346,6 +358,19 @@ unsafe fn usb_interrupt() {
         if let Some(c) = command {
             let response = parse_command(&c);
             serial.write(response).ok();
+            let crc = crc::crc8_ccitt_response(c[0], response);
+
+            serial.write("UMX".as_bytes()).ok();
+
+            let len = (response.len() + 1) as u16;
+
+            //send length
+            serial.write(&[(len >> 8) as u8]).ok();
+            serial.write(&[len as u8]).ok();
+            //send command code
+            serial.write(&[c[0]]).ok();
+            serial.write(response).ok();
+            serial.write(&[crc]).ok();
         }
     }
 }
@@ -379,7 +404,7 @@ fn uart_transmit_block(message: &[u8]) {
     tx.flush().ok();
 }
 
-fn reset_timer(tim: &mut TIM2){
+fn reset_timer(tim: &mut TIM2) {
     // Sets the URS bit to prevent an interrupt from being triggered by
     // the UG bit
     tim.cr1.modify(|_, w| w.urs().set_bit());
