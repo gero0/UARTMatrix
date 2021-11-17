@@ -1,3 +1,5 @@
+use core::sync::atomic::{AtomicBool, Ordering};
+
 use crate::{
     display::{font::Font, text_animations::TextAnimation, DisplayError, TextDisplay},
     BlinkingAnimation, DisplayMode, SlideAnimation, SlideDirection,
@@ -63,6 +65,7 @@ impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LEN
         mode: &mut DisplayMode<TEXT_ROW_LENGTH>,
         target: &mut T,
         oe: &mut bool,
+        clear_flag: &mut AtomicBool,
     ) -> Result<&'static str, DisplayError> {
         match mode {
             DisplayMode::TextMode(text_display) => {
@@ -79,7 +82,10 @@ impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LEN
                     Command::EnableOutput => {
                         *oe = true;
                     }
-                    Command::SwitchMode(switch_mode) => switch_mode.execute(mode, target)?,
+                    Command::SwitchMode(switch_mode) => {
+                        switch_mode.execute(mode, target)?;
+                        clear_flag.store(true, Ordering::Relaxed);
+                    }
                     _ => return Err(DisplayError::IncorrectMode),
                 }
                 target.clear(Rgb888::new(0, 0, 0)).ok();
@@ -108,9 +114,9 @@ impl<const TEXT_ROW_LENGTH: usize, const ROW_LENGTH: usize> Command<TEXT_ROW_LEN
                 Command::SwitchMode(switch_mode) => {
                     switch_mode.execute(mode, target)?;
                 }
-                
+
                 _ => return Err(DisplayError::IncorrectMode),
-            }
+            },
         }
         Ok("OK\n")
     }
@@ -274,7 +280,7 @@ impl DrawPixel {
         let coords = (buffer[1] as usize, buffer[2] as usize);
         let rgb_color = (buffer[3], buffer[4], buffer[5]);
 
-        if coords.0 > 63 || coords.1 > 31{
+        if coords.0 > 63 || coords.1 > 31 {
             return Err(DisplayError::OutOfBounds);
         }
 

@@ -7,6 +7,8 @@ mod crc;
 mod display;
 mod uart;
 
+use core::sync::atomic::{AtomicBool, Ordering};
+
 use crate::{
     command_interpreter::interpret_command,
     display::{
@@ -42,6 +44,8 @@ use usbd_serial::{SerialPort, USB_CLASS_CDC};
 use hub75::{Hub75, Pins};
 
 extern crate panic_semihosting;
+
+static mut CLEAR_FLAG: AtomicBool = AtomicBool::new(false);
 
 const BCM_DELAYS: [u16; 8] = [16, 32, 64, 128, 256, 512, 1024, 2048];
 const BCM_START: usize = 0;
@@ -257,6 +261,10 @@ fn main() -> ! {
             if let DisplayMode::TextMode(tm) = &mut DISPLAY_MODE {
                 tm.update(DISPLAY.as_mut().unwrap())
             };
+            if CLEAR_FLAG.load(Ordering::Relaxed) == true{
+                DISPLAY.as_mut().unwrap().clear_display();
+                CLEAR_FLAG.store(false, Ordering::Relaxed);
+            }
         }
     }
 }
@@ -282,7 +290,7 @@ unsafe fn USART1() {
         //send length
         uart_transmit_block(&[(len >> 8) as u8]);
         uart_transmit_block(&[len as u8]);
-        
+
         //send command code
         uart_transmit_block(&[c[0]]);
         uart_transmit_block(response);
@@ -383,6 +391,7 @@ fn parse_command(buffer: &[u8]) -> &[u8] {
                 &mut DISPLAY_MODE,
                 DISPLAY.as_mut().unwrap(),
                 &mut OUTPUT_ENABLED,
+                &mut CLEAR_FLAG,
             );
 
             match result {
