@@ -1,4 +1,5 @@
 {
     "rust-analyzer.cargo.target": "thumbv7m-none-eabi",
+    "rust-analyzer.cargo-watch.allTargets": false,
     "rust-analyzer.cargo.allFeatures": true,
 }
