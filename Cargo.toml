@@ -23,7 +23,7 @@ stm32f1xx-hal = { version = "0.7.0", features = [
     "rt",
     "stm32-usbd",
 ] }
-hub75 = { path = "../hub75-umx", features = ["stripe-multiplexing"] }
+hub75 = { path = "./hub75-umx", features = ["stripe-multiplexing"] }
 tinytga = "0.4.1"
 embedded-graphics = "0.7.1"
 ibm437 = "0.1.4"
