@@ -83,7 +83,11 @@ impl SlideAnimation {
         }
     }
 
-    pub fn set_length(&mut self, length: usize){
+    pub fn set_length(&mut self, mut length: usize){
+        if length < 80{
+            length = 80;
+        }
+
         self.slide_length = length;
     }
 
