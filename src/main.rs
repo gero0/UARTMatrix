@@ -47,10 +47,6 @@ extern crate panic_semihosting;
 
 static mut CLEAR_FLAG: AtomicBool = AtomicBool::new(false);
 
-const BCM_DELAYS: [u16; 8] = [16, 32, 64, 128, 256, 512, 1024, 2048];
-const BCM_START: usize = 0;
-static mut BCM_INDEX: usize = BCM_START;
-
 const DOUBLE_SCREEN_WIDTH: usize = 128;
 
 const PIN_POS: Pins = Pins {
@@ -76,7 +72,7 @@ static mut UARTCONTROLLER: Option<UartController<512>> = None;
 static mut DISPLAY: Option<Hub75<PIN_POS, DOUBLE_SCREEN_WIDTH>> = None;
 static mut DISPLAY_MODE: DisplayMode<256> = DisplayMode::DirectMode;
 static mut DELAY: Option<Delay> = None;
-static mut DRAW_TIMER: Option<TIM2> = None;
+static mut DRAW_TIMER: Option<CountDownTimer<TIM2>> = None;
 static mut ANIM_TIMER: Option<CountDownTimer<TIM3>> = None;
 static mut OUTPUT_ENABLED: bool = true;
 
@@ -177,7 +173,7 @@ fn main() -> ! {
         USB_DEVICE = Some(usb_dev);
 
         //0x40010C0C is address of GPIOB output register
-        DISPLAY = Some(Hub75::new(8, &mut *(0x40010C0C as *mut u16)));
+        DISPLAY = Some(Hub75::new(4, &mut *(0x40010C0C as *mut u16)));
 
         //Setting priorities and enabling interrupts
 
@@ -224,36 +220,14 @@ fn main() -> ! {
     }
 
     let mut anim_timer = Timer::tim3(dp.TIM3, &clocks, &mut rcc.apb1).start_count_down(60.hz());
+    let mut draw_timer = Timer::tim2(dp.TIM2, &clocks, &mut rcc.apb1).start_count_down(120.hz());
 
-    //enable peripheral and reset to clean state
-    TIM2::enable(&mut rcc.apb1);
-    TIM2::reset(&mut rcc.apb1);
-
-    // //Enable one pulse mode
-    dp.TIM2.cr1.write(|w| w.opm().set_bit());
-    // //ensure direction UP
-    dp.TIM2.cr1.write(|w| w.dir().clear_bit());
-
-    // set prescaler to /48
-    dp.TIM2.psc.write(|w| w.psc().bits(47));
-
-    // //Enable listening for event
-    dp.TIM2.dier.write(|w| w.uie().set_bit());
-
-    //set value for autoreload register, should be 120Hz
-    dp.TIM2.arr.write(|w| w.arr().bits(8333));
-
-    // Trigger an update event to load the prescaler value to the clock
-
-    reset_timer(&mut dp.TIM2);
-
-    // start counter
-    dp.TIM2.cr1.modify(|_, w| w.cen().set_bit());
 
     anim_timer.listen(Event::Update);
+    draw_timer.listen(Event::Update);
 
     unsafe {
-        DRAW_TIMER = Some(dp.TIM2);
+        DRAW_TIMER = Some(draw_timer);
         ANIM_TIMER = Some(anim_timer);
     }
     loop {
@@ -302,30 +276,15 @@ unsafe fn USART1() {
 
 #[interrupt]
 unsafe fn TIM2() {
-    if BCM_INDEX > 7 {
-        BCM_INDEX = BCM_START;
-    }
 
     if OUTPUT_ENABLED {
         DISPLAY
             .as_mut()
             .unwrap()
-            .output_single_bcm(DELAY.as_mut().unwrap(), BCM_INDEX as u8, 100);
+            .output(DELAY.as_mut().unwrap());
     }
 
-    let tim = DRAW_TIMER.as_mut().unwrap();
-
-    //set value for autoreload register, should be 120Hz
-    tim.arr.write(|w| w.arr().bits(BCM_DELAYS[BCM_INDEX]));
-    BCM_INDEX += 1;
-
-    //clear interrupt
-    tim.sr.modify(|_, w| w.uif().clear_bit());
-
-    reset_timer(tim);
-
-    // start counter
-    tim.cr1.modify(|_, w| w.cen().set_bit());
+    DRAW_TIMER.as_mut().unwrap().clear_update_interrupt_flag();
 }
 
 #[interrupt]
@@ -411,14 +370,4 @@ fn uart_transmit_block(message: &[u8]) {
         block!(tx.write(*character)).ok();
     }
     tx.flush().ok();
-}
-
-fn reset_timer(tim: &mut TIM2) {
-    // Sets the URS bit to prevent an interrupt from being triggered by
-    // the UG bit
-    tim.cr1.modify(|_, w| w.urs().set_bit());
-
-    tim.egr.write(|w| w.ug().set_bit());
-
-    tim.cr1.modify(|_, w| w.urs().clear_bit());
 }
