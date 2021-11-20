@@ -173,7 +173,7 @@ fn main() -> ! {
         USB_DEVICE = Some(usb_dev);
 
         //0x40010C0C is address of GPIOB output register
-        DISPLAY = Some(Hub75::new(4, &mut *(0x40010C0C as *mut u16)));
+        DISPLAY = Some(Hub75::new(&mut *(0x40010C0C as *mut u16)));
 
         //Setting priorities and enabling interrupts
 
