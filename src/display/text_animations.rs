@@ -70,13 +70,13 @@ impl SlideAnimation {
                 SlideDirection::Right => {
                     self.x_offset += 1;
                     if self.x_offset > self.slide_length as i32 {
-                        self.x_offset = -(2 * self.slide_length as i32)
+                        self.x_offset =  -(self.slide_length as i32) - 10;
                     }
                 }
                 SlideDirection::Left => {
                     self.x_offset -= 1;
                     if self.x_offset.abs() > self.slide_length as i32 {
-                        self.x_offset = self.slide_length as i32
+                        self.x_offset = 64;
                     }
                 }
             }
